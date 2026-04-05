@@ -25,6 +25,7 @@ let tF='All', cF='All', curTab='home';
 let selSegVal='All', editSegVal='All';
 let editClientId=null, editPartnerId=null, editCampaignId=null;
 let editingDealId=null;
+let homeTab='network', homeDealTasks=null;
 
 // ── HELPERS ───────────────────────────────────────────────────────
 const ini = n => n.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
@@ -198,6 +199,7 @@ function rHome(){
   document.getElementById('qs-par').textContent=PARTNERS.length;
 
   const list=document.getElementById('task-list'); list.innerHTML='';
+  if(homeTab==='deals'){ renderHomeDealTasks(); return; }
 
   // ── Bucket tasks into display groups ────────────────────────────
   const holidayRx=/easter|birthday|christmas|eid|diwali|wish|ramadan|hanukkah|new year/i;
@@ -259,6 +261,51 @@ function rHome(){
       list.appendChild(el);
     });
   });
+}
+
+function switchHomeTab(tab){
+  if(tab===homeTab) return;
+  homeTab=tab; homeDealTasks=null;
+  document.querySelectorAll('.home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
+  rHome();
+}
+
+async function renderHomeDealTasks(){
+  const list=document.getElementById('task-list');
+  if(homeDealTasks===null){
+    list.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
+    const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false});
+    homeDealTasks=data||[];
+  }
+  list.innerHTML='';
+  if(!homeDealTasks.length){
+    list.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding deal tasks.</div>';
+    return;
+  }
+  homeDealTasks.forEach((t,i)=>{
+    const deal=DEALS.find(d=>d.id===t.deal_id);
+    const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
+    const why=[client?client.name:'', t.due_date?'Due '+t.due_date:''].filter(Boolean).join(' · ');
+    const el=document.createElement('div');
+    el.className='tc normal a'; el.style.animationDelay=(i*0.04)+'s';
+    el.innerHTML=`<div class="tc-av deal-tc-av">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
+      <div class="tc-body"><div class="tc-act">${t.title}</div><div class="tc-why">${why}</div></div>
+      <div class="chk" onclick="tickDealTask('${t.id}',this,event)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>`;
+    if(deal) el.onclick=(e)=>{if(e.target.closest('.chk')) return; openDealModal(deal.clientId,deal.id);};
+    list.appendChild(el);
+  });
+}
+
+async function tickDealTask(id,el,e){
+  e.stopPropagation();
+  el.classList.add('on'); el.parentElement.classList.add('done');
+  await SB.from('deal_tasks').update({done:true}).eq('id',id);
+  homeDealTasks=(homeDealTasks||[]).filter(t=>t.id!==id);
+  setTimeout(()=>renderHomeDealTasks(),500);
 }
 
 async function tick(id, el, e){
