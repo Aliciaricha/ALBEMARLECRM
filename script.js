@@ -191,8 +191,8 @@ function rHome(){
   document.getElementById('prog-desc').textContent=
     nd===tot&&tot>0?'All done — exceptional work.':`${tot-nd} task${tot-nd===1?'':'s'} remaining today`;
 
-  const tv=DEALS.reduce((s,d)=>s+d.v,0);
-  document.getElementById('qs-pipe').textContent=fm(tv);
+  const tc=DEALS.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
+  document.getElementById('qs-pipe').textContent=fm(tc);
   document.getElementById('qs-cli').textContent=CLIENTS.length;
   document.getElementById('qs-cam').textContent=CAMPAIGNS.length;
   document.getElementById('qs-par').textContent=PARTNERS.length;
@@ -966,8 +966,8 @@ function logCall(c){
 
 // ── UTILS ─────────────────────────────────────────────────────────
 function updateHomeStats(){
-  const tv=DEALS.reduce((s,d)=>s+d.v,0);
-  document.getElementById('qs-pipe').textContent=fm(tv);
+  const tc=DEALS.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
+  document.getElementById('qs-pipe').textContent=fm(tc);
   document.getElementById('qs-cli').textContent=CLIENTS.length;
   document.getElementById('qs-cam').textContent=CAMPAIGNS.length;
   document.getElementById('qs-par').textContent=PARTNERS.length;
