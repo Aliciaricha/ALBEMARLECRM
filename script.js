@@ -123,6 +123,7 @@ function normaliseCampaign(r){
     template: r.template||null,
     waImage: r.wa_image||null,
     manualClientIds: r.manual_client_ids||[],
+    manualExcludedIds: r.manual_excluded_ids||[],
     manualPartnerIds: r.manual_partner_ids||[],
     manualRecIds: r.manual_rec_ids||[],
     includeAllPartners: r.include_all_partners||false,
@@ -160,17 +161,25 @@ function clientMatchesSeg(c, seg){
   return c.int && c.int.some(i=>i.toLowerCase().includes(seg.toLowerCase()));
 }
 
-function getCampaignClients(cam){
-  let filtered = CLIENTS;
+function getSegmentMatchedClients(cam){
+  let filtered=CLIENTS;
   if(cam.occ && cam.occ!==''){
-    const occs = cam.occ.split('/').map(o=>o.trim().toLowerCase());
-    filtered = filtered.filter(c => {
-      const relL = (c.rel||'').toLowerCase();
+    const occs=cam.occ.split('/').map(o=>o.trim().toLowerCase());
+    filtered=filtered.filter(c=>{
+      const relL=(c.rel||'').toLowerCase();
       return occs.some(o=>relL.includes(o)||o.includes(relL));
     });
   }
-  if(cam.seg && cam.seg!=='All') filtered = filtered.filter(c=>clientMatchesSeg(c,cam.seg));
-  // Add manual clients (deduplicated)
+  if(cam.seg && cam.seg!=='All') filtered=filtered.filter(c=>clientMatchesSeg(c,cam.seg));
+  return filtered.map(c=>c.id);
+}
+
+function getCampaignClients(cam){
+  const segIds=getSegmentMatchedClients(cam);
+  const excludedIds=new Set(cam.manualExcludedIds||[]);
+  // Segment matches minus excluded
+  let filtered=CLIENTS.filter(c=>segIds.includes(c.id)&&!excludedIds.has(c.id));
+  // Add manual clients (always included, even if they'd otherwise be excluded)
   if(cam.manualClientIds && cam.manualClientIds.length){
     const existing=new Set(filtered.map(c=>c.id));
     CLIENTS.filter(c=>cam.manualClientIds.includes(c.id)&&!existing.has(c.id)).forEach(c=>filtered.push(c));
@@ -186,7 +195,7 @@ function getCampaignContacts(cam){
   );
   const pList=cam.includeAllPartners?PARTNERS:PARTNERS.filter(p=>(cam.manualPartnerIds||[]).includes(p.id));
   pList.forEach(p=>
-    contacts.push({type:'partner',id:p.id,name:p.name,sub:p.cat||'',av:abbr(p.name),avStyle:'border-radius:10px',obj:p})
+    contacts.push({type:'partner',id:p.id,name:p.contact||p.name,sub:p.name,av:p.contact?ini(p.contact):abbr(p.name),avStyle:'border-radius:10px;background:rgba(46,125,82,0.09);border-color:rgba(46,125,82,0.22);color:var(--green)',obj:p})
   );
   const rList=cam.includeAllRolodex?RECS:RECS.filter(r=>(cam.manualRecIds||[]).includes(r.id));
   rList.forEach(r=>
@@ -733,13 +742,27 @@ function renderAddCamList(){
   const cam=CAMPAIGNS.find(c=>c.id===addingCampaignId); if(!cam) return;
   const list=document.getElementById('add-cam-client-list');
   if(addCamTab==='clients'){
-    const segClients=getCampaignClients(cam).map(c=>c.id);
-    list.innerHTML=CLIENTS.map(c=>{
-      const enrolled=segClients.includes(c.id)||(cam.manualClientIds||[]).includes(c.id);
+    const segIds=getSegmentMatchedClients(cam);
+    const excludedIds=new Set(cam.manualExcludedIds||[]);
+    const manualIds=new Set(cam.manualClientIds||[]);
+    // Sort: Auto first, then Manually Added, then Not enrolled, then Excluded last
+    const sorted=[...CLIENTS].sort((a,b)=>{
+      const ord=c=>{ if(segIds.includes(c.id)&&!excludedIds.has(c.id)) return 0; if(manualIds.has(c.id)) return 1; if(excludedIds.has(c.id)) return 3; return 2; };
+      return ord(a)-ord(b);
+    });
+    list.innerHTML=sorted.map(c=>{
+      const isAuto=segIds.includes(c.id)&&!excludedIds.has(c.id)&&!manualIds.has(c.id);
+      const isAdded=manualIds.has(c.id);
+      const isExcluded=excludedIds.has(c.id);
+      let pillClass,pillLabel;
+      if(isAdded){pillClass='p-gold';pillLabel='Added';}
+      else if(isAuto){pillClass='p-grn';pillLabel='Auto';}
+      else if(isExcluded){pillClass='p-red';pillLabel='Excluded';}
+      else{pillClass='p-gh';pillLabel='Add';}
       return `<div class="cam-roster-item" onclick="toggleCamContact('client','${c.id}','${cam.id}')">
         <div class="cri-av">${ini(c.name)}</div>
         <div style="flex:1;min-width:0"><div class="cri-name">${c.name}</div><div class="cri-sub">${c.role||c.city||''}</div></div>
-        <span class="pill ${enrolled?'p-grn':'p-gh'}" style="font-size:9px">${enrolled?'Enrolled':'Add'}</span>
+        <span class="pill ${pillClass}" style="font-size:9px">${pillLabel}</span>
       </div>`;
     }).join('');
   } else if(addCamTab==='partners'){
@@ -749,9 +772,11 @@ function renderAddCamList(){
       <span class="pill ${cam.includeAllPartners?'p-grn':'p-gh'}" style="font-size:9px">${cam.includeAllPartners?'Enrolled':'Add Group'}</span>
     </div>`+PARTNERS.map(p=>{
       const enrolled=(cam.manualPartnerIds||[]).includes(p.id)||cam.includeAllPartners;
+      const pDisplayName=p.contact||p.name;
+      const pAv=p.contact?ini(p.contact):abbr(p.name);
       return `<div class="cam-roster-item" onclick="toggleCamContact('partner','${p.id}','${cam.id}')">
-        <div class="cri-av" style="border-radius:10px">${abbr(p.name)}</div>
-        <div style="flex:1;min-width:0"><div class="cri-name">${p.name}</div><div class="cri-sub">${p.cat||''}</div></div>
+        <div class="cri-av" style="border-radius:10px;background:rgba(46,125,82,0.09);border-color:rgba(46,125,82,0.22);color:var(--green)">${pAv}</div>
+        <div style="flex:1;min-width:0"><div class="cri-name">${pDisplayName}</div><div class="cri-sub">${p.name}</div></div>
         <span class="pill ${enrolled?'p-grn':'p-gh'}" style="font-size:9px">${enrolled?'Enrolled':'Add'}</span>
       </div>`;
     }).join('');
@@ -779,18 +804,51 @@ function switchAddCamTab(el,tab){
 
 async function toggleCamContact(type, contactId, camId){
   const cam=CAMPAIGNS.find(c=>c.id===camId); if(!cam) return;
+
+  if(type==='client'){
+    // 4-state logic: Auto → Exclude | Excluded → Restore | Added → Remove | Not enrolled → Add
+    const segIds=getSegmentMatchedClients(cam);
+    const isSegMatch=segIds.includes(contactId);
+    const isExcluded=(cam.manualExcludedIds||[]).includes(contactId);
+    const isManuallyAdded=(cam.manualClientIds||[]).includes(contactId);
+    let newManualIds=[...(cam.manualClientIds||[])];
+    let newExcludedIds=[...(cam.manualExcludedIds||[])];
+    let toastMsg='';
+    if(isManuallyAdded){
+      newManualIds=newManualIds.filter(id=>id!==contactId);
+      toastMsg='Removed';
+    } else if(isExcluded){
+      newExcludedIds=newExcludedIds.filter(id=>id!==contactId);
+      toastMsg='Restored ✓';
+    } else if(isSegMatch){
+      newExcludedIds.push(contactId);
+      toastMsg='Excluded';
+    } else {
+      newManualIds.push(contactId);
+      toastMsg='Added ✓';
+    }
+    const {error}=await SB.from('campaigns').update({manual_client_ids:newManualIds,manual_excluded_ids:newExcludedIds}).eq('id',camId);
+    if(error){ showToast('Error updating'); return; }
+    cam.manualClientIds=newManualIds;
+    cam.manualExcludedIds=newExcludedIds;
+    renderAddCamList();
+    if(openCampaignId===camId) renderCampaignProfile(cam);
+    showToast(toastMsg);
+    return;
+  }
+
+  // Partners and Rolodex — simple toggle
   let field, ids;
-  if(type==='client'){ field='manual_client_ids'; ids=[...(cam.manualClientIds||[])]; }
-  else if(type==='partner'){ field='manual_partner_ids'; ids=[...(cam.manualPartnerIds||[])]; }
+  if(type==='partner'){ field='manual_partner_ids'; ids=[...(cam.manualPartnerIds||[])]; }
   else { field='manual_rec_ids'; ids=[...(cam.manualRecIds||[])]; }
   const idx=ids.indexOf(contactId);
   if(idx>-1) ids.splice(idx,1); else ids.push(contactId);
   const {error}=await SB.from('campaigns').update({[field]:ids}).eq('id',camId);
   if(error){ showToast('Error updating'); return; }
-  if(type==='client') cam.manualClientIds=ids;
-  else if(type==='partner') cam.manualPartnerIds=ids;
+  if(type==='partner') cam.manualPartnerIds=ids;
   else cam.manualRecIds=ids;
   renderAddCamList();
+  if(openCampaignId===camId) renderCampaignProfile(cam);
   showToast(idx>-1?'Removed':'Added ✓');
 }
 
@@ -803,7 +861,32 @@ async function toggleCamGroup(groupType, camId){
   if(groupType==='partners') cam.includeAllPartners=!current;
   else cam.includeAllRolodex=!current;
   renderAddCamList();
+  if(openCampaignId===camId) renderCampaignProfile(cam);
   showToast(!current?'Group added ✓':'Group removed');
+}
+
+async function resetCampaignContacts(){
+  const cam=CAMPAIGNS.find(c=>c.id===addingCampaignId); if(!cam) return;
+  if(!confirm('Reset this campaign to its original segment selection? All manual adds, removals and exclusions will be cleared.')) return;
+  const {error}=await SB.from('campaigns').update({
+    manual_client_ids:[],
+    manual_excluded_ids:[],
+    manual_partner_ids:[],
+    manual_rec_ids:[],
+    include_all_partners:false,
+    include_all_rolodex:false,
+  }).eq('id',cam.id);
+  if(error){ showToast('Error resetting'); return; }
+  cam.manualClientIds=[];
+  cam.manualExcludedIds=[];
+  cam.manualPartnerIds=[];
+  cam.manualRecIds=[];
+  cam.includeAllPartners=false;
+  cam.includeAllRolodex=false;
+  renderAddCamList();
+  // Also re-render campaign profile if open
+  if(openCampaignId===cam.id) renderCampaignProfile(cam);
+  showToast('Reset to default ✓');
 }
 
 // ── CLIENTS ───────────────────────────────────────────────────────
@@ -1164,7 +1247,7 @@ function setF(el,type,val){
   cF=val;document.querySelectorAll('#c-chips .chip').forEach(c=>c.classList.toggle('on',c===el));rPartners();
 }
 
-const TABS=['home','deals','campaigns','clients','partners','recs','settings'];
+const TABS=['home','deals','campaigns','clients','partners','recs'];
 function go(tab){
   if(tab===curTab) return;
   // Close any open profiles
@@ -1189,7 +1272,6 @@ function go(tab){
   else if(tab==='clients') rClients();
   else if(tab==='partners') rPartners();
   else if(tab==='recs') rRecs();
-  else if(tab==='settings') rSettings();
   document.getElementById('s-'+tab).scrollTop=0;
 }
 
