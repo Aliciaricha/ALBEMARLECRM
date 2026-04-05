@@ -37,7 +37,9 @@ function saveRelCadences(){ localStorage.setItem('rel_cadences',JSON.stringify(R
 // ── STATE ─────────────────────────────────────────────────────────
 let CLIENTS=[], PARTNERS=[], DEALS=[], CAMPAIGNS=[], RECS=[];
 let doneTasks = new Set(); // task_key set from DB
-let tF='All', cF='All', relF='All', curTab='home';
+let cF='All', curTab='home';
+let relF='All'; // KEEP for backward compat but no longer used in UI
+let clientFilters={relationship:null, nw:null, interest:null}; // active filter state
 let selSegVal='All', editSegVal='All';
 let editClientId=null, editPartnerId=null, editCampaignId=null;
 let editingDealId=null;
@@ -580,6 +582,30 @@ async function toggleCamClient(clientId,camId,el){
 
 // ── CLIENTS ───────────────────────────────────────────────────────
 function rClients(){
+  const q=(document.getElementById('cli-q')||{}).value||'';
+  let list=[...CLIENTS];
+
+  // Active filters
+  if(clientFilters.relationship) list=list.filter(c=>c.relationship===clientFilters.relationship);
+  if(clientFilters.nw) list=list.filter(c=>c.nw===clientFilters.nw);
+  if(clientFilters.interest) list=list.filter(c=>(c.int||[]).some(i=>i.toLowerCase()===clientFilters.interest.toLowerCase()));
+  if(clientFilters._nat) list=list.filter(c=>matchesNatCity(c.nat,clientFilters._nat));
+  if(clientFilters._city) list=list.filter(c=>matchesNatCity(c.city,clientFilters._city));
+
+  // Smart search: name, role, nationality (partial word), city, interests
+  if(q){
+    const ql=q.toLowerCase();
+    list=list.filter(c=>{
+      if((c.name||'').toLowerCase().includes(ql)) return true;
+      if((c.role||'').toLowerCase().includes(ql)) return true;
+      if(matchesNatCity(c.nat,q)) return true;
+      if(matchesNatCity(c.city,q)) return true;
+      if((c.int||[]).some(i=>i.toLowerCase().includes(ql))) return true;
+      return false;
+    });
+  }
+
+  // Stats
   const total=CLIENTS.length;
   const billionaires=CLIENTS.filter(c=>c.nw==='Billionaire').length;
   const centimillionaires=CLIENTS.filter(c=>c.nw==='Centimillionaire').length;
@@ -587,16 +613,26 @@ function rClients(){
   const statsEl=document.getElementById('cli-stats');
   if(statsEl) statsEl.innerHTML=`
     <div class="cli-stat"><div class="cli-stat-n">${total}</div><div class="cli-stat-l">Total</div></div>
-    <div class="cli-stat"><div class="cli-stat-n g">${billionaires}</div><div class="cli-stat-l">Billionaire</div></div>
+    <div class="cli-stat"><div class="cli-stat-n g">${billionaires}</div><div class="cli-stat-l">Billionaires</div></div>
     <div class="cli-stat"><div class="cli-stat-n">${centimillionaires}</div><div class="cli-stat-l">Centimilli.</div></div>
     <div class="cli-stat"><div class="cli-stat-n">${activeRels}</div><div class="cli-stat-l">Active</div></div>
   `;
 
-  const q=(document.getElementById('cli-q')||{}).value||'';
-  let list=CLIENTS;
-  if(tF!=='All') list=list.filter(c=>c.tier===tF);
-  if(relF!=='All') list=list.filter(c=>c.relationship===relF);
-  if(q) list=list.filter(c=>c.name.toLowerCase().includes(q.toLowerCase())||(c.role||'').toLowerCase().includes(q.toLowerCase()));
+  // Active filter pills
+  const activeBar=document.getElementById('cli-active-filters');
+  if(activeBar){
+    const pills=[];
+    if(clientFilters.relationship) pills.push({label:clientFilters.relationship,key:'relationship'});
+    if(clientFilters.nw) pills.push({label:clientFilters.nw,key:'nw'});
+    if(clientFilters.interest) pills.push({label:clientFilters.interest,key:'interest'});
+    if(clientFilters._nat) pills.push({label:'Nationality: '+clientFilters._nat,key:'_nat'});
+    if(clientFilters._city) pills.push({label:'City: '+clientFilters._city,key:'_city'});
+    activeBar.innerHTML=pills.map(p=>`<div class="active-fpill" onclick="removeFilter('${p.key}')">${p.label} ✕</div>`).join('');
+    // Update filter button label
+    const lbl=document.getElementById('cli-filter-lbl');
+    if(lbl) lbl.textContent=pills.length?`Filter (${pills.length})`:'Filter';
+  }
+
   const el=document.getElementById('cli-list'); el.innerHTML='';
   list.forEach((c,i)=>{
     const rel=REL_CADENCES[c.relationship];
@@ -606,19 +642,76 @@ function rClients(){
     div.className='pc gc a'; div.style.animationDelay=(i*0.04)+'s';
     div.onclick=()=>openC(c);
     div.innerHTML=`<div class="pc-av">${ini(c.name)}${c.deal?'<div class="dot"></div>':''}</div>
-      <div class="pc-info"><div class="pc-name">${c.name}</div><div class="pc-sub">${c.role||c.city}</div></div>
+      <div class="pc-info"><div class="pc-name">${c.name}</div><div class="pc-sub">${c.role||c.city||''}</div></div>
       <div class="pc-r">
-        <span class="pill" style="background:${TC[c.tier]||'#888'}18;color:${TC[c.tier]||'#888'};border-color:${TC[c.tier]||'#888'}40">${c.tier}</span>
+        ${c.relationship?`<span class="pill p-gh" style="font-size:9px">${c.relationship}</span>`:''}
         ${clOv?'<span class="pill p-red" style="font-size:9px">Call due</span>':waOv?'<span class="pill p-amb" style="font-size:9px">Follow up</span>':''}
       </div>`;
     el.appendChild(div);
   });
 }
 
-function setRelF(el,val){
-  relF=val;
-  document.querySelectorAll('#r-chips .chip').forEach(c=>c.classList.toggle('on',c===el));
+function removeFilter(key){
+  delete clientFilters[key];
+  clientFilters[key]=null;
   rClients();
+}
+
+function matchesNatCity(val, query){
+  if(!val||!query) return false;
+  const v=val.toLowerCase(), q=query.toLowerCase();
+  // Direct include
+  if(v.includes(q)) return true;
+  // Split compound values (e.g. "British Indian", "British/Palestinian")
+  const parts=v.split(/[\s/,&-]+/).map(p=>p.trim()).filter(Boolean);
+  return parts.some(p=>p.startsWith(q)||q.startsWith(p));
+}
+
+function openClientFilters(){
+  // Populate interests dynamically from client data
+  const interestSet=new Set();
+  CLIENTS.forEach(c=>(c.int||[]).forEach(i=>interestSet.add(i.trim())));
+  const interestChips=document.getElementById('filter-interests-chips');
+  interestChips.innerHTML=[...interestSet].sort().map(i=>
+    `<div class="fchip${clientFilters.interest===i?' on':''}" data-group="interest" data-val="${i}" onclick="toggleFChip(this)">${i}</div>`
+  ).join('');
+  // Restore current filter state in chips
+  document.querySelectorAll('.fchip[data-group="relationship"]').forEach(c=>c.classList.toggle('on',c.dataset.val===clientFilters.relationship));
+  document.querySelectorAll('.fchip[data-group="nw"]').forEach(c=>c.classList.toggle('on',c.dataset.val===clientFilters.nw));
+  openModal('modal-client-filters');
+}
+
+function toggleFChip(el){
+  const group=el.dataset.group;
+  // Single select per group — toggle off if already on
+  const wasOn=el.classList.contains('on');
+  document.querySelectorAll(`.fchip[data-group="${group}"]`).forEach(c=>c.classList.remove('on'));
+  if(!wasOn) el.classList.add('on');
+}
+
+function applyClientFilters(){
+  clientFilters.relationship=document.querySelector('.fchip[data-group="relationship"].on')?.dataset.val||null;
+  clientFilters.nw=document.querySelector('.fchip[data-group="nw"].on')?.dataset.val||null;
+  clientFilters.interest=document.querySelector('.fchip[data-group="interest"].on')?.dataset.val||null;
+  closeModal('modal-client-filters');
+  rClients();
+}
+
+function clearClientFilters(){
+  clientFilters={relationship:null,nw:null,interest:null};
+  document.querySelectorAll('.fchip').forEach(c=>c.classList.remove('on'));
+  closeModal('modal-client-filters');
+  rClients();
+}
+
+function filterByNat(val){
+  // Called when tapping nationality in a client profile
+  clientFilters={relationship:null,nw:null,interest:null,_nat:val};
+  if(curTab!=='clients') go('clients'); else rClients();
+}
+function filterByCity(val){
+  clientFilters={relationship:null,nw:null,interest:null,_city:val};
+  if(curTab!=='clients') go('clients'); else rClients();
 }
 
 function openC(c){
@@ -646,12 +739,12 @@ function openC(c){
     <div class="prof-hero">
       <div class="prof-av-row">
         <div class="prof-av">${ini(c.name)}</div>
-        <div><div class="prof-name">${c.name}</div><div class="prof-role-l">${c.role||''}${c.role&&c.city?' · ':''}${c.city}</div></div>
+        <div><div class="prof-name">${c.name}</div><div class="prof-role-l">${c.role||''}${c.role&&c.city?' · ':''}<span${c.city?` style="cursor:pointer;color:var(--gold)" onclick="filterByCity('${c.city.replace(/'/g,"\\'")}');closeProf('ps-client')"`:''} >${c.city}</span></div></div>
       </div>
       <div class="prof-pills">
         <span class="pill" style="background:${TC[c.tier]||'#888'}15;color:${TC[c.tier]||'#888'};border-color:${TC[c.tier]||'#888'}40">${c.tier}</span>
         <span class="pill p-gh">${c.nw}</span>
-        ${c.nat?`<span class="pill p-gh">${c.nat}</span>`:''}
+        ${c.nat?`<span class="pill p-gh" style="cursor:pointer" onclick="filterByNat('${c.nat.replace(/'/g,"\\'")}');closeProf('ps-client')">${c.nat}</span>`:''}
         ${c.deal?'<span class="pill p-gold">Active Deal</span>':''}
         <span class="pill p-gh">${c.rel}</span>
         ${c.relationship?`<span class="pill p-gh">${c.relationship}</span>`:''}
@@ -837,8 +930,7 @@ async function saveEditRec(){
 
 // ── FILTER & NAV ─────────────────────────────────────────────────
 function setF(el,type,val){
-  if(type==='t'){tF=val;document.querySelectorAll('#t-chips .chip').forEach(c=>c.classList.toggle('on',c===el));rClients();}
-  else{cF=val;document.querySelectorAll('#c-chips .chip').forEach(c=>c.classList.toggle('on',c===el));rPartners();}
+  cF=val;document.querySelectorAll('#c-chips .chip').forEach(c=>c.classList.toggle('on',c===el));rPartners();
 }
 
 const TABS=['home','deals','campaigns','clients','partners','recs','settings'];

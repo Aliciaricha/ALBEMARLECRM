@@ -117,20 +117,12 @@
         <input type="text" id="cli-q" placeholder="Search clients…" oninput="rClients()">
       </div>
       <div class="cli-stats-row" id="cli-stats"></div>
-      <div class="chips" id="t-chips">
-        <div class="chip on" onclick="setF(this,'t','All')">All</div>
-        <div class="chip" onclick="setF(this,'t','Top')">Top</div>
-        <div class="chip" onclick="setF(this,'t','Active')">Active</div>
-        <div class="chip" onclick="setF(this,'t','Warm')">Warm</div>
-        <div class="chip" onclick="setF(this,'t','Sleeper')">Sleeper</div>
-      </div>
-      <div class="chips" id="r-chips">
-        <div class="chip on" onclick="setRelF(this,'All')">All</div>
-        <div class="chip" onclick="setRelF(this,'Personal')">Personal</div>
-        <div class="chip" onclick="setRelF(this,'Close')">Close</div>
-        <div class="chip" onclick="setRelF(this,'General')">General</div>
-        <div class="chip" onclick="setRelF(this,'Proxy')">Proxy</div>
-        <div class="chip" onclick="setRelF(this,'Archive')">Archive</div>
+      <div class="cli-filter-bar">
+        <div class="cli-active-filters" id="cli-active-filters"></div>
+        <button class="cli-filter-btn" onclick="openClientFilters()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+          <span id="cli-filter-lbl">Filter</span>
+        </button>
       </div>
       <div class="plist" id="cli-list"></div>
       <div style="height:24px"></div>
@@ -256,7 +248,7 @@
           <select id="nc-rel"><option>Unknown</option><option>Muslim</option><option>Christian</option><option>Hindu</option><option>Jewish</option><option>Other</option></select>
         </div>
         <div class="form-field"><label>Relationship</label>
-          <select id="nc-rel2"><option>Personal</option><option>Close</option><option>General</option><option>Proxy</option><option>Archive</option></select>
+          <select id="nc-rel2"><option>Personal</option><option>General</option><option>Proxy</option><option>Archive</option></select>
         </div>
       </div>
       <div class="form-field"><label>Interests (comma separated)</label><input type="text" id="nc-int" placeholder="e.g. Real Estate, Jewellery"></div>
@@ -296,7 +288,7 @@
           <select id="ec-rel"><option>Unknown</option><option>Muslim</option><option>Christian</option><option>Hindu</option><option>Jewish</option><option>Other</option></select>
         </div>
         <div class="form-field"><label>Relationship</label>
-          <select id="ec-rel2"><option>Personal</option><option>Close</option><option>General</option><option>Proxy</option><option>Archive</option></select>
+          <select id="ec-rel2"><option>Personal</option><option>General</option><option>Proxy</option><option>Archive</option></select>
         </div>
       </div>
       <div class="form-field"><label>Interests (comma separated)</label><input type="text" id="ec-int"></div>
@@ -602,6 +594,46 @@
     </div>
     <div class="form-footer">
       <div class="form-cancel" onclick="closeModal('modal-add-cam-client')">Done</div>
+    </div>
+  </div>
+</div>
+
+<!-- CLIENT FILTERS SHEET -->
+<div class="modal-overlay" id="modal-client-filters" onclick="closeModalOut(event,'modal-client-filters')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Filter Clients</div>
+    <div class="form-body" style="gap:18px">
+
+      <div class="filter-section">
+        <div class="filter-sec-lbl">Relationship</div>
+        <div class="filter-chips-wrap">
+          <div class="fchip" data-group="relationship" data-val="Personal" onclick="toggleFChip(this)">Personal</div>
+          <div class="fchip" data-group="relationship" data-val="General" onclick="toggleFChip(this)">General</div>
+          <div class="fchip" data-group="relationship" data-val="Proxy" onclick="toggleFChip(this)">Proxy</div>
+          <div class="fchip" data-group="relationship" data-val="Archive" onclick="toggleFChip(this)">Archive</div>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-sec-lbl">Net Worth</div>
+        <div class="filter-chips-wrap">
+          <div class="fchip" data-group="nw" data-val="Billionaire" onclick="toggleFChip(this)">Billionaire</div>
+          <div class="fchip" data-group="nw" data-val="Centimillionaire" onclick="toggleFChip(this)">Centimillionaire</div>
+          <div class="fchip" data-group="nw" data-val="UHNWI" onclick="toggleFChip(this)">UHNWI</div>
+          <div class="fchip" data-group="nw" data-val="HNWI" onclick="toggleFChip(this)">HNWI</div>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-sec-lbl">Interests</div>
+        <div class="filter-chips-wrap" id="filter-interests-chips"></div>
+      </div>
+
+    </div>
+    <div class="form-footer" style="padding-top:6px">
+      <button class="form-submit" onclick="applyClientFilters()">Apply Filters</button>
+      <div class="form-cancel" onclick="clearClientFilters()">Clear All</div>
     </div>
   </div>
 </div>
