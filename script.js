@@ -810,6 +810,8 @@ Rules: open with [Name], warm luxury tone, 3-4 sentences max, no emojis unless c
 }
 
 // ── DEAL MODAL ────────────────────────────────────────────────────
+let dealTasks=[];
+
 function openDealModal(presetClientId, editDealId){
   editingDealId=editDealId||null;
   const cs=document.getElementById('nd-client');
@@ -817,6 +819,9 @@ function openDealModal(presetClientId, editDealId){
   if(presetClientId) cs.value=presetClientId;
   const ps=document.getElementById('nd-partner');
   ps.innerHTML=PARTNERS.map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
+
+  const tasksSection=document.getElementById('nd-tasks-section');
+  const taskForm=document.getElementById('nd-task-form');
 
   if(editDealId){
     const d=DEALS.find(x=>x.id===editDealId);
@@ -831,12 +836,69 @@ function openDealModal(presetClientId, editDealId){
       document.getElementById('deal-modal-title').textContent='Edit Deal';
       document.getElementById('deal-submit-btn').textContent='Save Changes';
     }
+    tasksSection.style.display='block';
+    taskForm.style.display='none';
+    loadDealTasks(editDealId);
   } else {
     document.getElementById('deal-modal-title').textContent='New Deal';
     document.getElementById('deal-submit-btn').textContent='Add Deal';
     ['nd-value','nd-pct','nd-notes'].forEach(id=>document.getElementById(id).value='');
+    tasksSection.style.display='none';
+    taskForm.style.display='none';
+    dealTasks=[];
   }
   openModal('modal-deal');
+}
+
+// ── DEAL TASKS ────────────────────────────────────────────────────
+async function loadDealTasks(dealId){
+  dealTasks=[];
+  renderDealTasks();
+  const {data}=await SB.from('deal_tasks').select('*').eq('deal_id',dealId).order('due_date',{ascending:true});
+  dealTasks=data||[];
+  renderDealTasks();
+}
+
+function renderDealTasks(){
+  const list=document.getElementById('nd-task-list'); if(!list) return;
+  if(!dealTasks.length){
+    list.innerHTML='<div class="deal-task-empty">No tasks yet.</div>'; return;
+  }
+  list.innerHTML=dealTasks.map(t=>`<div class="deal-task-item${t.done?' done':''}">
+    <div class="deal-task-chk${t.done?' on':''}" onclick="toggleDealTask('${t.id}',${!t.done})">
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="white"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="deal-task-info">
+      <div class="deal-task-title-txt">${t.title}</div>
+      ${t.due_date?`<div class="deal-task-due">${t.due_date}</div>`:''}
+    </div>
+  </div>`).join('');
+}
+
+function toggleDealTaskForm(){
+  const form=document.getElementById('nd-task-form');
+  const open=form.style.display==='none';
+  form.style.display=open?'flex':'none';
+  if(open) document.getElementById('nd-task-title').focus();
+}
+
+async function saveDealTask(){
+  const title=document.getElementById('nd-task-title').value.trim(); if(!title) return;
+  const due=document.getElementById('nd-task-due').value||null;
+  const {data,error}=await SB.from('deal_tasks').insert({deal_id:editingDealId,title,due_date:due,done:false}).select().single();
+  if(error){ showToast('Could not save task'); return; }
+  dealTasks.push(data);
+  renderDealTasks();
+  document.getElementById('nd-task-title').value='';
+  document.getElementById('nd-task-due').value='';
+  document.getElementById('nd-task-form').style.display='none';
+  showToast('Task added ✓');
+}
+
+async function toggleDealTask(id,done){
+  await SB.from('deal_tasks').update({done}).eq('id',id);
+  const t=dealTasks.find(x=>x.id===id); if(t) t.done=done;
+  renderDealTasks();
 }
 
 async function saveDeal(){
