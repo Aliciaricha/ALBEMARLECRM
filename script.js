@@ -329,14 +329,11 @@ async function renderHomeDealTasks(){
       el.innerHTML=`<div class="tc-av deal-tc-av">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         </div>
-        <div class="tc-body"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
-        <button class="dt-edit-btn" onclick="editDealTask('${t.id}',event)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        </button>
+        <div class="tc-body" onclick="editDealTask('${t.id}',event)" style="cursor:pointer"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
         <div class="chk" onclick="tickDealTask('${t.id}',this,event)">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>`;
-      if(deal) el.onclick=(e)=>{if(e.target.closest('.chk')||e.target.closest('.dt-edit-btn')) return; openDealModal(deal.clientId,deal.id);};
+      if(deal) el.onclick=(e)=>{if(e.target.closest('.chk')||e.target.closest('.tc-body')) return; openDealModal(deal.clientId,deal.id);};
       list.appendChild(el);
     });
   });
