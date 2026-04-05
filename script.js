@@ -346,6 +346,7 @@ function editDealTask(id,e){
   e.stopPropagation();
   const t=homeDealTasks.find(x=>x.id===id); if(!t) return;
   const card=e.target.closest('.tc');
+  card.style.cssText='display:block;padding:14px 16px;cursor:default';
   card.innerHTML=`<div class="dt-edit-form">
     <input class="dt-edit-input" id="dte-title-${id}" value="${t.title.replace(/"/g,'&quot;')}" placeholder="Task title…">
     <input type="date" class="dt-edit-date" id="dte-date-${id}" value="${t.due_date||''}">
@@ -981,7 +982,7 @@ function renderDealTasks(){
   if(!dealTasks.length){
     list.innerHTML='<div class="deal-task-empty">No tasks yet.</div>'; return;
   }
-  list.innerHTML=dealTasks.map(t=>`<div class="deal-task-item${t.done?' done':''}">
+  list.innerHTML=dealTasks.map(t=>`<div class="deal-task-item${t.done?' done':''}" id="dti-${t.id}">
     <div class="deal-task-chk${t.done?' on':''}" onclick="toggleDealTask('${t.id}',${!t.done})">
       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="white"><polyline points="20 6 9 17 4 12"/></svg>
     </div>
@@ -989,7 +990,38 @@ function renderDealTasks(){
       <div class="deal-task-title-txt">${t.title}</div>
       ${t.due_date?`<div class="deal-task-due">${t.due_date}</div>`:''}
     </div>
+    <button class="dt-edit-btn" onclick="editModalDealTask('${t.id}',event)" title="Edit">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    </button>
   </div>`).join('');
+}
+
+function editModalDealTask(id,e){
+  e.stopPropagation();
+  const t=dealTasks.find(x=>x.id===id); if(!t) return;
+  const item=document.getElementById('dti-'+id);
+  item.style.cssText='display:block;padding:10px 12px';
+  item.innerHTML=`<div class="dt-edit-form">
+    <input class="dt-edit-input" id="dtm-title-${id}" value="${t.title.replace(/"/g,'&quot;')}" placeholder="Task title…">
+    <input type="date" class="dt-edit-date" id="dtm-date-${id}" value="${t.due_date||''}">
+    <div class="dt-edit-actions">
+      <button class="dt-save-btn" onclick="saveModalDealTaskEdit('${id}')">Save</button>
+      <span class="dt-cancel-btn" onclick="renderDealTasks()">Cancel</span>
+    </div>
+  </div>`;
+  document.getElementById('dtm-title-'+id).focus();
+}
+
+async function saveModalDealTaskEdit(id){
+  const title=document.getElementById('dtm-title-'+id)?.value.trim();
+  const due=document.getElementById('dtm-date-'+id)?.value||null;
+  if(!title) return;
+  const btn=document.querySelector(`#dti-${id} .dt-save-btn`); if(btn){btn.textContent='…';btn.disabled=true;}
+  const {error}=await SB.from('deal_tasks').update({title,due_date:due}).eq('id',id);
+  if(error){ showToast('Could not update task'); renderDealTasks(); return; }
+  const t=dealTasks.find(x=>x.id===id);
+  if(t){t.title=title; t.due_date=due;}
+  renderDealTasks(); showToast('Task updated ✓');
 }
 
 function toggleDealTaskForm(){
