@@ -280,29 +280,44 @@ async function tick(id, el, e){
 
 // ── DEALS ─────────────────────────────────────────────────────────
 function rDeals(){
-  const tv=DEALS.reduce((s,d)=>s+d.v,0);
   const tc=DEALS.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
-  document.getElementById('d-tp').textContent=fm(tv);
-  document.getElementById('d-tc').textContent=fm(tc);
-  document.getElementById('d-cnt').textContent=DEALS.length;
-  document.getElementById('d-conf').textContent=DEALS.filter(d=>d.s==='Confirmed').length;
+  document.getElementById('d-tp').textContent=fm(tc);
+  document.getElementById('d-tc').textContent=DEALS.length;
 
+  // Stage summary bubbles
+  const STAGE_IDS={Confirmed:'conf',Negotiation:'neg',Tentative:'tent',Waiting:'wait'};
+  Object.entries(STAGE_IDS).forEach(([stage,key])=>{
+    const sd=DEALS.filter(d=>d.s===stage);
+    const sv=sd.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
+    document.getElementById('d-sg-'+key+'-v').textContent=fm(sv);
+    document.getElementById('d-sg-'+key+'-n').textContent=sd.length+(sd.length===1?' deal':' deals');
+  });
+
+  // Grouped deal cards by stage
   const list=document.getElementById('deal-list'); list.innerHTML='';
-  DEALS.forEach((d,i)=>{
-    const client=CLIENTS.find(c=>c.id===d.clientId);
-    const cname=client?client.name:d.clientId;
-    const com=d.v*(d.pct/100);
-    const el=document.createElement('div');
-    el.className='dc gc-s a'; el.style.animationDelay=(i*0.05)+'s';
-    el.onclick=()=>openDealModal(d.clientId, d.id);
-    el.innerHTML=`<div class="dc-top">
-      <div><div class="dc-cli">${cname}</div><div class="dc-par">${d.pt} · ${d.cat}</div></div>
-      <span class="pill ${SC[d.s]||'p-gh'}">${d.s}</span>
-    </div>
-    <div class="dc-bot">
-      <div><div class="dc-val">${fm(d.v)}</div><div class="dc-com">~${fm(com)} commission</div></div>
-    </div>`;
-    list.appendChild(el);
+  const STAGES=['Confirmed','Negotiation','Tentative','Waiting'];
+  let gi=0;
+  STAGES.forEach(stage=>{
+    const sd=DEALS.filter(d=>d.s===stage);
+    if(!sd.length) return;
+    const hdr=document.createElement('div');
+    hdr.className='deal-group-hdr'; hdr.textContent=stage;
+    list.appendChild(hdr);
+    sd.forEach(d=>{
+      const client=CLIENTS.find(c=>c.id===d.clientId);
+      const cname=client?client.name:d.clientId;
+      const com=d.v*(d.pct/100);
+      const el=document.createElement('div');
+      el.className='dc gc-s a'; el.style.animationDelay=(gi++*0.05)+'s';
+      el.onclick=()=>openDealModal(d.clientId,d.id);
+      el.innerHTML=`<div class="dc-top">
+        <div><div class="dc-cli">${cname}</div><div class="dc-par">${d.pt} · ${d.cat}</div></div>
+      </div>
+      <div class="dc-bot">
+        <div><div class="dc-val">${fm(com)}</div><div class="dc-spend">${fm(d.v)} client spend</div></div>
+      </div>`;
+      list.appendChild(el);
+    });
   });
 }
 
