@@ -1254,7 +1254,7 @@ function selEditSeg(el,val){ editSegVal=val; document.querySelectorAll('#edit-se
 async function saveClient(){
   const name=document.getElementById('nc-name').value.trim();
   if(!name){ alert('Please enter a full name.'); return; }
-  const ints=document.getElementById('nc-int').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const ints=[...document.querySelectorAll('#nc-int-chips .int-chip.on')].map(el=>el.textContent);
   const row={
     name, position:document.getElementById('nc-role').value.trim(),
     city:document.getElementById('nc-city').value.trim(),
@@ -1264,7 +1264,7 @@ async function saveClient(){
     religion:document.getElementById('nc-rel').value,
     relationship:document.getElementById('nc-rel2').value,
     proxy_contact: document.getElementById('nc-proxy').value.trim()||null,
-    interests:ints.length?ints:['Real Estate'],
+    interests:ints,
     notes:document.getElementById('nc-notes').value.trim(),
     sort_order: CLIENTS.length
   };
@@ -1272,7 +1272,8 @@ async function saveClient(){
   if(error){ alert('Error saving: '+error.message); return; }
   CLIENTS.push(normaliseClient(data));
   closeModal('modal-client');
-  ['nc-name','nc-role','nc-city','nc-nat','nc-int','nc-notes'].forEach(id=>document.getElementById(id).value='');
+  ['nc-name','nc-role','nc-city','nc-nat','nc-notes'].forEach(id=>document.getElementById(id).value='');
+  document.querySelectorAll('#nc-int-chips .int-chip').forEach(el=>el.classList.remove('on'));
   rClients(); updateHomeStats(); showToast('Client added ✓');
 }
 
@@ -1287,7 +1288,8 @@ function openEditClient(id){
   document.getElementById('ec-nat').value=c.nat||'';
   document.getElementById('ec-rel').value=c.rel||'Unknown';
   document.getElementById('ec-rel2').value=c.relationship||'General';
-  document.getElementById('ec-int').value=(c.int||[]).join(', ');
+  const clientInts=(c.int||[]).map(i=>i.toLowerCase());
+  document.querySelectorAll('#ec-int-chips .int-chip').forEach(el=>el.classList.toggle('on',clientInts.includes(el.textContent.toLowerCase())));
   document.getElementById('ec-notes').value=c.notes||'';
   document.getElementById('ec-proxy').value=c.proxyContact||'';
   document.getElementById('ec-proxy-row').style.display=c.relationship==='Proxy'?'':'none';
@@ -1296,7 +1298,7 @@ function openEditClient(id){
 
 async function saveEditClient(){
   const c=CLIENTS.find(x=>x.id===editClientId); if(!c) return;
-  const ints=document.getElementById('ec-int').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const ints=[...document.querySelectorAll('#ec-int-chips .int-chip.on')].map(el=>el.textContent);
   const updates={
     name:document.getElementById('ec-name').value.trim()||c.name,
     position:document.getElementById('ec-role').value.trim(),

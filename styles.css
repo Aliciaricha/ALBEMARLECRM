@@ -312,6 +312,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .filter-chips-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
 .fchip { padding: 7px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; border: 0.5px solid rgba(0,0,0,0.08); background: rgba(255,255,255,0.65); color: var(--t2); transition: all 0.15s; }
 .fchip.on { background: var(--t1); border-color: var(--t1); color: white; }
+.int-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.int-chip { padding: 6px 13px; border-radius: 16px; font-size: 11px; font-weight: 600; cursor: pointer; border: 0.5px solid rgba(0,0,0,0.08); background: rgba(255,255,255,0.60); color: var(--t2); transition: all 0.15s; user-select: none; -webkit-user-select: none; }
+.int-chip.on { background: var(--gold); border-color: var(--gold); color: white; }
 
 /* Settings */
 .settings-rel-row { padding: 14px 0; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
