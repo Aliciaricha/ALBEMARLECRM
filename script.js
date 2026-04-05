@@ -420,6 +420,7 @@ function editDealTask(id,e){
     <div class="dt-edit-actions">
       <button class="dt-save-btn" onclick="saveDealTaskEdit('${id}')">Save</button>
       <span class="dt-cancel-btn" onclick="renderHomeDealTasks()">Cancel</span>
+      <span class="dt-delete-btn" onclick="deleteDealTask('${id}','home')">Delete</span>
     </div>
   </div>`;
   document.getElementById('dte-title-'+id).focus();
@@ -436,6 +437,18 @@ async function saveDealTaskEdit(id){
   const t=homeDealTasks.find(x=>x.id===id);
   if(t){ t.title=title; t.due_date=due; }
   renderHomeDealTasks(); showToast('Task updated ✓');
+}
+
+async function deleteDealTask(id, source){
+  const {error}=await SB.from('deal_tasks').delete().eq('id',id);
+  if(error){ showToast('Could not delete task'); return; }
+  if(source==='modal'){
+    dealTasks=dealTasks.filter(t=>t.id!==id);
+    renderDealTasks(); showToast('Task deleted');
+  } else {
+    homeDealTasks=(homeDealTasks||[]).filter(t=>t.id!==id);
+    renderHomeDealTasks(); showToast('Task deleted');
+  }
 }
 
 async function tickDealTask(id,el,e){
@@ -1427,6 +1440,7 @@ function editModalDealTask(id, e){
     <div class="dt-edit-actions">
       <button class="dt-save-btn" onclick="saveModalDealTaskEdit('${id}')">Save</button>
       <span class="dt-cancel-btn" onclick="renderDealTasks()">Cancel</span>
+      <span class="dt-delete-btn" onclick="deleteDealTask('${id}','modal')">Delete</span>
     </div>
   </div>`;
   const inp=document.getElementById('dtm-title-'+id);

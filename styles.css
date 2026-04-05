@@ -81,6 +81,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .dt-edit-actions { display: flex; align-items: center; gap: 12px; }
 .dt-save-btn { padding: 7px 18px; border-radius: var(--r-sm); border: none; background: var(--gold); color: white; font-family: 'Manrope'; font-size: 12px; font-weight: 600; cursor: pointer; }
 .dt-cancel-btn { font-size: 12px; color: var(--t3); cursor: pointer; padding: 4px; }
+.dt-delete-btn { font-size: 12px; color: var(--red); cursor: pointer; padding: 4px; margin-left: auto; font-weight: 600; }
 .tasks { padding: 0 16px; display: flex; flex-direction: column; gap: 9px; }
 .tc { display: flex; align-items: center; gap: 13px; padding: 13px 14px; border-radius: var(--r-md); cursor: pointer; position: relative; overflow: hidden; transition: transform 0.14s; background: rgba(255,255,255,0.52); backdrop-filter: blur(24px) saturate(1.8); -webkit-backdrop-filter: blur(24px) saturate(1.8); border: 0.5px solid rgba(255,255,255,0.78); box-shadow: var(--sh), inset 0 1px 0 rgba(255,255,255,0.70); }
 .tc::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; }
