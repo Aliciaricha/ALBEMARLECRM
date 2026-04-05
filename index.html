@@ -53,7 +53,10 @@
         <div class="qs" onclick="go('campaigns')"><div class="qs-n" id="qs-cam">0</div><div class="qs-l">Campaigns</div></div>
         <div class="qs" onclick="go('partners')"><div class="qs-n" id="qs-par">0</div><div class="qs-l">Partners</div></div>
       </div>
-      <div class="sl" style="margin-bottom:11px">Outstanding Tasks</div>
+      <div class="home-toggle">
+        <div class="home-toggle-btn on" data-tab="network" onclick="switchHomeTab('network')">Network</div>
+        <div class="home-toggle-btn" data-tab="deals" onclick="switchHomeTab('deals')">Deals</div>
+      </div>
       <div class="tasks" id="task-list"></div>
       <div style="height:24px"></div>
     </div>
