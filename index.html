@@ -248,8 +248,12 @@
           <select id="nc-rel"><option>Unknown</option><option>Muslim</option><option>Christian</option><option>Hindu</option><option>Jewish</option><option>Other</option></select>
         </div>
         <div class="form-field"><label>Relationship</label>
-          <select id="nc-rel2"><option>Personal</option><option>General</option><option>Proxy</option><option>Archive</option></select>
+          <select id="nc-rel2" onchange="document.getElementById('nc-proxy-row').style.display=this.value==='Proxy'?'':'none'"><option>Personal</option><option>General</option><option>Proxy</option><option>Archive</option></select>
         </div>
+      </div>
+      <div class="form-field" id="nc-proxy-row" style="display:none">
+        <label>Proxy Contact Name</label>
+        <input type="text" id="nc-proxy" placeholder="e.g. Hassan Al-Farsi (assistant)">
       </div>
       <div class="form-field"><label>Interests (comma separated)</label><input type="text" id="nc-int" placeholder="e.g. Real Estate, Jewellery"></div>
       <div class="form-field"><label>Notes</label><textarea id="nc-notes" placeholder="Key context about this client…"></textarea></div>
@@ -288,8 +292,12 @@
           <select id="ec-rel"><option>Unknown</option><option>Muslim</option><option>Christian</option><option>Hindu</option><option>Jewish</option><option>Other</option></select>
         </div>
         <div class="form-field"><label>Relationship</label>
-          <select id="ec-rel2"><option>Personal</option><option>General</option><option>Proxy</option><option>Archive</option></select>
+          <select id="ec-rel2" onchange="document.getElementById('ec-proxy-row').style.display=this.value==='Proxy'?'':'none'"><option>Personal</option><option>General</option><option>Proxy</option><option>Archive</option></select>
         </div>
+      </div>
+      <div class="form-field" id="ec-proxy-row" style="display:none">
+        <label>Proxy Contact Name</label>
+        <input type="text" id="ec-proxy" placeholder="e.g. Hassan Al-Farsi (assistant)">
       </div>
       <div class="form-field"><label>Interests (comma separated)</label><input type="text" id="ec-int"></div>
       <div class="form-field"><label>Notes</label><textarea id="ec-notes"></textarea></div>

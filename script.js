@@ -45,6 +45,7 @@ let editClientId=null, editPartnerId=null, editCampaignId=null;
 let editingDealId=null;
 let editRecId=null;
 let homeTab='deals', homeDealTasks=null;
+let doneDealTasksToday = 0;
 let addingCampaignId=null;
 let ncam_imageData=null, ecam_imageData=null;
 
@@ -93,6 +94,7 @@ function normaliseClient(r){
     wa: r.last_wa||null, call: r.last_call||null,
     followUp: r.follow_up_date||null, deal: r.has_deal||false,
     relationship: r.relationship||'',
+    proxyContact: r.proxy_contact||'',
   };
 }
 function normalisePartner(r){
@@ -122,6 +124,23 @@ function normaliseCampaign(r){
 }
 
 // ── SEGMENT & TASK LOGIC ──────────────────────────────────────────
+function campaignTiming(cam){
+  if(!cam.date||cam.date==='Ongoing') return 'Ongoing';
+  if(cam.date==='TBC') return 'TBC';
+  try{
+    const today=new Date(); today.setHours(0,0,0,0);
+    const d=new Date(cam.date); d.setHours(0,0,0,0);
+    const diff=Math.floor((d-today)/86400000);
+    if(diff>1) return `Due in ${diff} days`;
+    if(diff===1) return 'Due tomorrow';
+    if(diff===0) return 'Due today';
+    const over=Math.abs(diff);
+    if(over<7) return `${over} day${over===1?'':'s'} overdue`;
+    const weeks=Math.round(over/7);
+    return `${weeks} week${weeks===1?'':'s'} overdue`;
+  }catch(e){ return cam.date; }
+}
+
 function clientMatchesSeg(c, seg){
   if(!seg||seg==='All') return true;
   if(seg==='Billionaire') return c.nw==='Billionaire';
@@ -172,11 +191,7 @@ function mkTasks(){
 
     if(camCovered.has(c.id)){
       const cam=camCovered.get(c.id);
-      let camWhy='Campaign · '+cam.type+(cam.date!=='Ongoing'?' · '+cam.date:'');
-      if(cam.type==='Triggered'&&cam.date){
-        const du=Math.floor((new Date(cam.date)-TODAY)/86400000);
-        camWhy=du===0?'Today!':du===1?'Tomorrow':`In ${du} days`;
-      }
+      const camWhy=campaignTiming(cam);
       t.push({id:'cam-'+cam.id+'-'+c.id, nm:c.name, act:cam.name+' — '+c.name,
         why:camWhy,
         urg:'soon', pri:(rel.p*10)+2, isCam:true, camId:cam.id, clientObj:c});
@@ -201,11 +216,7 @@ function mkTasks(){
     const alreadyIn=t.some(x=>x.camId===cam.id);
     if(!alreadyIn){
       const cnt=getCampaignClients(cam).length;
-      let standaloneWhy=cnt+' clients · '+cam.type+(cam.date!=='Ongoing'?' · '+cam.date:'');
-      if(cam.type==='Triggered'&&cam.date){
-        const du=Math.floor((new Date(cam.date)-TODAY)/86400000);
-        standaloneWhy=cnt+' clients · '+(du===0?'Today!':du===1?'Tomorrow':`In ${du} days`);
-      }
+      const standaloneWhy=`${cnt} client${cnt===1?'':'s'} · ${campaignTiming(cam)}`;
       t.push({id:'cam-'+cam.id, nm:'Campaign', act:cam.name,
         why:standaloneWhy,
         urg:'soon', pri:25, isCam:true, camId:cam.id, clientObj:null});
@@ -216,10 +227,8 @@ function mkTasks(){
 }
 
 // ── HOME ──────────────────────────────────────────────────────────
-function rHome(){
-  const tasks=mkTasks(), tot=tasks.length, nd=doneTasks.size;
-  const pct=tot?Math.round(nd/tot*100):0;
-  const urg=tasks.filter(t=>t.urg==='urgent'&&!doneTasks.has(t.id)).length;
+function updateProgressRing(tot, nd, urg, desc){
+  const pct = tot ? Math.round(nd/tot*100) : 0;
   setTimeout(()=>{
     const el=document.getElementById('ring-el');
     if(el) el.style.strokeDashoffset=226.2-(pct/100)*226.2;
@@ -228,9 +237,11 @@ function rHome(){
   document.getElementById('ps-done').textContent=nd;
   document.getElementById('ps-tot').textContent=tot;
   document.getElementById('ps-urg').textContent=urg;
-  document.getElementById('prog-desc').textContent=
-    nd===tot&&tot>0?'All done — exceptional work.':`${tot-nd} task${tot-nd===1?'':'s'} remaining today`;
+  document.getElementById('prog-desc').textContent=desc;
+}
 
+function rHome(){
+  // Quick stats row (always)
   const tc=DEALS.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
   document.getElementById('qs-pipe').textContent=fm(tc);
   document.getElementById('qs-cli').textContent=CLIENTS.length;
@@ -238,9 +249,19 @@ function rHome(){
   document.getElementById('qs-par').textContent=PARTNERS.length;
 
   const list=document.getElementById('task-list'); list.innerHTML='';
-  if(homeTab==='deals'){ renderHomeDealTasks(); return; }
 
-  // ── Bucket tasks into display groups ────────────────────────────
+  if(homeTab==='deals'){
+    updateProgressRing(0,0,0,'Loading deal tasks…');
+    renderHomeDealTasks();
+    return;
+  }
+
+  // ── Network tab ────────────────────────────────────────────────
+  const tasks=mkTasks(), tot=tasks.length, nd=doneTasks.size;
+  const urg=tasks.filter(t=>t.urg==='urgent'&&!doneTasks.has(t.id)).length;
+  updateProgressRing(tot,nd,urg,
+    nd===tot&&tot>0?'All done — exceptional work.':`${tot-nd} task${tot-nd===1?'':'s'} remaining today`);
+
   const BUCKETS=[
     {key:'followups',  label:'Follow-Ups',          tasks:[]},
     {key:'mandates',   label:'Mandates',             tasks:[]},
@@ -251,15 +272,14 @@ function rHome(){
     const cam=t.camId?CAMPAIGNS.find(c=>c.id===t.camId):null;
     let b;
     if(cam){
-      if(cam.type==='Mandate')                          b=BUCKETS[1];
-      else if(cam.type==='Seasonal'||cam.type==='Triggered') b=BUCKETS[3];
-      else if(cam.type==='Follow-Up')                   b=BUCKETS[0];
-      else                                               b=BUCKETS[2];
+      if(cam.type==='Mandate')                                    b=BUCKETS[1];
+      else if(cam.type==='Seasonal'||cam.type==='Triggered')     b=BUCKETS[3];
+      else if(cam.type==='Follow-Up')                             b=BUCKETS[0];
+      else                                                         b=BUCKETS[2];
     } else { b=BUCKETS[0]; }
     b.tasks.push(t);
   });
 
-  // ── Render each bucket with a subheading ────────────────────────
   let gi=0;
   BUCKETS.forEach(bucket=>{
     if(!bucket.tasks.length) return;
@@ -271,6 +291,7 @@ function rHome(){
       const el=document.createElement('div');
       el.className=`tc ${isDone?'done':t.isCam?'campaign':t.urg} a`;
       el.style.animationDelay=(gi++*0.04)+'s';
+      if(isDone) el.style.display='none'; // completed tasks hidden from start on re-render
       const avClass=t.isCam?'cam-av':'';
       const avContent=t.isCam?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>':ini(t.nm);
       el.innerHTML=`<div class="tc-av ${avClass}">${avContent}</div>
@@ -301,6 +322,7 @@ function rHome(){
 
 function switchHomeTab(tab){
   if(tab===homeTab) return;
+  doneDealTasksToday=0;
   homeTab=tab; homeDealTasks=null;
   document.querySelectorAll('.home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   rHome();
@@ -324,15 +346,32 @@ async function renderHomeDealTasks(){
   if(homeDealTasks===null){
     list.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
     const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false});
-    homeDealTasks=data||[];
+    // Filter: only show tasks due today or overdue (no future tasks)
+    const todayD=new Date(); todayD.setHours(0,0,0,0);
+    homeDealTasks=(data||[]).filter(t=>{
+      if(!t.due_date) return false;
+      const d=new Date(t.due_date); d.setHours(0,0,0,0);
+      return d<=todayD;
+    });
   }
+
+  // Update progress ring for deals tab
+  const tot=homeDealTasks.length+doneDealTasksToday;
+  const nd=doneDealTasksToday;
+  const urg=homeDealTasks.filter(t=>{
+    const d=new Date(t.due_date); d.setHours(0,0,0,0);
+    const now=new Date(); now.setHours(0,0,0,0);
+    return Math.floor((now-d)/86400000)>3;
+  }).length;
+  updateProgressRing(tot,nd,urg,
+    tot===0?'No deal tasks due today.':nd===tot&&tot>0?'All done — great progress.':`${tot-nd} deal task${tot-nd===1?'':'s'} remaining today`);
+
   list.innerHTML='';
   if(!homeDealTasks.length){
-    list.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding deal tasks.</div>';
+    list.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No deal tasks due today.</div>';
     return;
   }
 
-  // ── Group by deal category ──────────────────────────────────────
   const catMap=new Map();
   homeDealTasks.forEach(t=>{
     const deal=DEALS.find(d=>d.id===t.deal_id);
@@ -355,11 +394,16 @@ async function renderHomeDealTasks(){
       el.innerHTML=`<div class="tc-av deal-tc-av">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         </div>
-        <div class="tc-body" onclick="editDealTask('${t.id}',event)" style="cursor:pointer"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
-        <div class="chk" onclick="tickDealTask('${t.id}',this,event)">
+        <div class="tc-body" style="cursor:pointer"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
+        <div class="chk">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>`;
-      if(deal) el.onclick=(e)=>{if(e.target.closest('.chk')||e.target.closest('.tc-body')) return; openDealModal(deal.clientId,deal.id);};
+      // Edit on body click
+      el.querySelector('.tc-body').onclick=(ev)=>editDealTask(t.id,ev);
+      // Tick
+      el.querySelector('.chk').onclick=(ev)=>tickDealTask(t.id,el.querySelector('.chk'),ev);
+      // Open deal modal on card click (not body or chk)
+      if(deal) el.onclick=(ev)=>{if(ev.target.closest('.chk')||ev.target.closest('.tc-body')) return; openDealModal(deal.clientId,deal.id);};
       list.appendChild(el);
     });
   });
@@ -396,27 +440,64 @@ async function saveDealTaskEdit(id){
 
 async function tickDealTask(id,el,e){
   e.stopPropagation();
-  el.classList.add('on'); el.parentElement.classList.add('done');
+  el.classList.add('on');
+  const card=el.closest('.tc');
+  card.classList.add('done');
   await SB.from('deal_tasks').update({done:true}).eq('id',id);
   homeDealTasks=(homeDealTasks||[]).filter(t=>t.id!==id);
-  setTimeout(()=>renderHomeDealTasks(),500);
+  doneDealTasksToday++;
+  // Update ring
+  const tot=homeDealTasks.length+doneDealTasksToday;
+  const nd=doneDealTasksToday;
+  const urg=homeDealTasks.filter(t=>{
+    const d=new Date(t.due_date); d.setHours(0,0,0,0);
+    const now=new Date(); now.setHours(0,0,0,0);
+    return Math.floor((now-d)/86400000)>3;
+  }).length;
+  updateProgressRing(tot,nd,urg,
+    tot===0?'No deal tasks due today.':nd===tot?'All done — great progress.':`${tot-nd} deal task${tot-nd===1?'':'s'} remaining today`);
+  // Fade out card
+  setTimeout(()=>{
+    card.style.transition='opacity 0.45s, max-height 0.45s, margin-bottom 0.45s, padding 0.45s';
+    card.style.opacity='0';
+    card.style.maxHeight='0';
+    card.style.overflow='hidden';
+    card.style.padding='0';
+    card.style.marginBottom='0';
+    setTimeout(()=>card.remove(),450);
+  },2000);
 }
 
 async function tick(id, el, e){
   e.stopPropagation();
   const today=new Date().toISOString().split('T')[0];
   if(doneTasks.has(id)){
+    // Un-tick: restore and re-render
     doneTasks.delete(id);
-    el.classList.remove('on');
-    el.parentElement.className=el.parentElement.className.replace('done','').trim();
     await SB.from('task_completions').delete().eq('task_key',id);
+    rHome();
   } else {
     doneTasks.add(id);
     el.classList.add('on');
-    el.parentElement.classList.add('done');
-    await SB.from('task_completions').upsert({task_key:id, reset_date:today},{onConflict:'task_key'});
+    const card=el.parentElement;
+    card.classList.add('done');
+    await SB.from('task_completions').upsert({task_key:id,reset_date:today},{onConflict:'task_key'});
+    // Update ring counts without re-rendering list
+    const tasks=mkTasks(), tot=tasks.length, nd=doneTasks.size;
+    const urg=tasks.filter(t=>t.urg==='urgent'&&!doneTasks.has(t.id)).length;
+    updateProgressRing(tot,nd,urg,
+      nd===tot&&tot>0?'All done — exceptional work.':`${tot-nd} task${tot-nd===1?'':'s'} remaining today`);
+    // Fade out after 2 s
+    setTimeout(()=>{
+      card.style.transition='opacity 0.45s, max-height 0.45s, margin-bottom 0.45s, padding 0.45s';
+      card.style.opacity='0';
+      card.style.maxHeight='0';
+      card.style.overflow='hidden';
+      card.style.padding='0';
+      card.style.marginBottom='0';
+      setTimeout(()=>card.remove(),450);
+    },2000);
   }
-  rHome();
 }
 
 // ── DEALS ─────────────────────────────────────────────────────────
@@ -642,11 +723,15 @@ function rClients(){
     div.className='pc gc a'; div.style.animationDelay=(i*0.04)+'s';
     div.onclick=()=>openC(c);
     div.innerHTML=`<div class="pc-av">${ini(c.name)}${c.deal?'<div class="dot"></div>':''}</div>
-      <div class="pc-info"><div class="pc-name">${c.name}</div><div class="pc-sub">${c.role||c.city||''}</div></div>
-      <div class="pc-r">
-        ${c.relationship?`<span class="pill p-gh" style="font-size:9px">${c.relationship}</span>`:''}
-        ${clOv?'<span class="pill p-red" style="font-size:9px">Call due</span>':waOv?'<span class="pill p-amb" style="font-size:9px">Follow up</span>':''}
-      </div>`;
+  <div class="pc-info">
+    <div class="pc-name">${c.name}</div>
+    <div class="pc-sub">${c.role||c.city||''}</div>
+    ${c.relationship==='Proxy'&&c.proxyContact?`<div class="pc-proxy">via ${c.proxyContact}</div>`:''}
+  </div>
+  <div class="pc-r">
+    ${c.relationship?`<span class="pill p-gh" style="font-size:9px">${c.relationship}</span>`:''}
+    ${clOv?'<span class="pill p-red" style="font-size:9px">Call due</span>':waOv?'<span class="pill p-amb" style="font-size:9px">Follow up</span>':''}
+  </div>`;
     el.appendChild(div);
   });
 }
@@ -750,6 +835,7 @@ function openC(c){
         ${c.relationship?`<span class="pill p-gh">${c.relationship}</span>`:''}
       </div>
     </div>
+    ${c.relationship==='Proxy'&&c.proxyContact?`<div class="prof-sec" style="padding:12px 18px;margin-bottom:10px;display:flex;align-items:center;gap:10px;background:rgba(138,109,62,0.06);border-color:var(--gold-border)"><div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--t3);flex-shrink:0">Via Proxy</div><div style="font-size:13px;font-weight:600;color:var(--t1)">${c.proxyContact}</div></div>`:''}
     <div class="prof-sec">
       <div class="sec-lbl">Contact Status</div>
       ${c.relationship?`<div class="sec-row"><div class="sec-k">Relationship</div><div class="sec-v">${c.relationship}</div></div>`:''}
@@ -1032,6 +1118,7 @@ async function saveClient(){
     nationality:document.getElementById('nc-nat').value.trim(),
     religion:document.getElementById('nc-rel').value,
     relationship:document.getElementById('nc-rel2').value,
+    proxy_contact: document.getElementById('nc-proxy').value.trim()||null,
     interests:ints.length?ints:['Real Estate'],
     notes:document.getElementById('nc-notes').value.trim(),
     sort_order: CLIENTS.length
@@ -1057,6 +1144,8 @@ function openEditClient(id){
   document.getElementById('ec-rel2').value=c.relationship||'General';
   document.getElementById('ec-int').value=(c.int||[]).join(', ');
   document.getElementById('ec-notes').value=c.notes||'';
+  document.getElementById('ec-proxy').value=c.proxyContact||'';
+  document.getElementById('ec-proxy-row').style.display=c.relationship==='Proxy'?'':'none';
   openModal('modal-edit-client');
 }
 
@@ -1072,12 +1161,13 @@ async function saveEditClient(){
     nationality:document.getElementById('ec-nat').value.trim(),
     religion:document.getElementById('ec-rel').value,
     relationship:document.getElementById('ec-rel2').value,
+    proxy_contact: document.getElementById('ec-proxy').value.trim()||null,
     interests:ints,
     notes:document.getElementById('ec-notes').value.trim(),
   };
   const {error}=await SB.from('clients').update(updates).eq('id',editClientId);
   if(error){ alert('Error: '+error.message); return; }
-  Object.assign(c, normaliseClient({...updates, id:editClientId, last_wa:c.wa, last_call:c.call, follow_up_date:c.followUp, has_deal:c.deal}));
+  Object.assign(c, normaliseClient({...updates, id:editClientId, last_wa:c.wa, last_call:c.call, follow_up_date:c.followUp, has_deal:c.deal, proxy_contact:updates.proxy_contact}));
   closeModal('modal-edit-client');
   openC(c);
   if(curTab==='clients') rClients();
@@ -1296,34 +1386,51 @@ async function loadDealTasks(dealId){
 
 function renderDealTasks(){
   const list=document.getElementById('nd-task-list'); if(!list) return;
+  list.innerHTML='';
   if(!dealTasks.length){
-    list.innerHTML='<div class="deal-task-empty">No tasks yet.</div>'; return;
+    const empty=document.createElement('div');
+    empty.className='deal-task-empty'; empty.textContent='No tasks yet.';
+    list.appendChild(empty); return;
   }
-  list.innerHTML=dealTasks.map(t=>`<div class="deal-task-item${t.done?' done':''}" id="dti-${t.id}">
-    <div class="deal-task-chk${t.done?' on':''}" onclick="toggleDealTask('${t.id}',${!t.done})">
-      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="white"><polyline points="20 6 9 17 4 12"/></svg>
-    </div>
-    <div class="deal-task-info" onclick="editModalDealTask('${t.id}',event)" style="cursor:pointer">
-      <div class="deal-task-title-txt">${t.title}</div>
-      ${t.due_date?`<div class="deal-task-due">${t.due_date}</div>`:''}
-    </div>
-  </div>`).join('');
+  dealTasks.forEach(t=>{
+    const item=document.createElement('div');
+    item.className='deal-task-item'+(t.done?' done':'');
+    item.id='dti-'+t.id;
+
+    const chk=document.createElement('div');
+    chk.className='deal-task-chk'+(t.done?' on':'');
+    chk.innerHTML=`<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="white"><polyline points="20 6 9 17 4 12"/></svg>`;
+    chk.onclick=(e)=>{ e.stopPropagation(); toggleDealTask(t.id,!t.done); };
+
+    const info=document.createElement('div');
+    info.className='deal-task-info';
+    info.style.cursor='pointer';
+    info.innerHTML=`<div class="deal-task-title-txt">${t.title}</div>${t.due_date?`<div class="deal-task-due">${t.due_date}</div>`:''}`;
+    info.onclick=(e)=>{ e.stopPropagation(); editModalDealTask(t.id,e); };
+
+    item.appendChild(chk);
+    item.appendChild(info);
+    list.appendChild(item);
+  });
 }
 
-function editModalDealTask(id,e){
-  e.stopPropagation();
+function editModalDealTask(id, e){
+  if(e) e.stopPropagation();
   const t=dealTasks.find(x=>x.id===id); if(!t) return;
-  const item=document.getElementById('dti-'+id);
-  item.style.cssText='display:block;padding:10px 12px';
+  const item=document.getElementById('dti-'+id); if(!item) return;
+  // Switch to block layout so form isn't clipped by flex
+  item.style.display='block';
+  item.style.padding='10px 12px';
   item.innerHTML=`<div class="dt-edit-form">
-    <input class="dt-edit-input" id="dtm-title-${id}" value="${t.title.replace(/"/g,'&quot;')}" placeholder="Task title…">
+    <input class="dt-edit-input" id="dtm-title-${id}" value="${(t.title||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}" placeholder="Task title…">
     <input type="date" class="dt-edit-date" id="dtm-date-${id}" value="${t.due_date||''}">
     <div class="dt-edit-actions">
       <button class="dt-save-btn" onclick="saveModalDealTaskEdit('${id}')">Save</button>
       <span class="dt-cancel-btn" onclick="renderDealTasks()">Cancel</span>
     </div>
   </div>`;
-  document.getElementById('dtm-title-'+id).focus();
+  const inp=document.getElementById('dtm-title-'+id);
+  if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }
 }
 
 async function saveModalDealTaskEdit(id){

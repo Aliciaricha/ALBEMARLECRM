@@ -163,6 +163,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .pc-info { flex: 1; min-width: 0; }
 .pc-name { font-size: 14px; font-weight: 600; color: var(--t1); }
 .pc-sub { font-size: 11px; color: var(--t2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc-proxy { font-size: 10px; color: var(--gold); font-weight: 500; margin-top: 2px; font-style: italic; }
 .pc-r { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
 .prof-wrap { padding: 0 16px 20px; }
 .prof-back-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 0 12px; }
