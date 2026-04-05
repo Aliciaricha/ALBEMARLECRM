@@ -128,7 +128,7 @@ function mkTasks(){
   const activeCams = CAMPAIGNS.filter(c=>{
     if(c.date==='Ongoing') return true;
     if(c.date==='TBC') return false;
-    try{ const d=new Date(c.date); const diff=Math.floor((d-TODAY)/86400000); return diff>=-3&&diff<=30; }catch(e){ return false; }
+    try{ const d=new Date(c.date); const diff=Math.floor((d-TODAY)/86400000); if(c.type==='Triggered') return diff===0; return diff>=-3&&diff<=30; }catch(e){ return false; }
   });
 
   const camCovered = new Map();
@@ -198,35 +198,66 @@ function rHome(){
   document.getElementById('qs-par').textContent=PARTNERS.length;
 
   const list=document.getElementById('task-list'); list.innerHTML='';
-  tasks.forEach((t,i)=>{
-    const isDone=doneTasks.has(t.id);
-    const el=document.createElement('div');
-    el.className=`tc ${isDone?'done':t.isCam?'campaign':t.urg} a`;
-    el.style.animationDelay=(i*0.04)+'s';
-    const avClass=t.isCam?'cam-av':'';
-    const avContent=t.isCam?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>':ini(t.nm);
-    el.innerHTML=`<div class="tc-av ${avClass}">${avContent}</div>
-      <div class="tc-body"><div class="tc-act">${t.act}</div><div class="tc-why">${t.why}</div></div>
-      <div class="chk ${isDone?'on':''}" onclick="tick('${t.id}',this,event)">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-      </div>`;
-    if(t.isCam){
-      el.onclick=(e)=>{ if(e.target.closest('.chk')) return;
-        const cam=CAMPAIGNS.find(c=>c.id===t.camId);
-        if(t.clientObj) openWaSheet(t.clientObj,cam);
-        else openCampaign(cam);
-      };
-    } else {
-      const isCall=t.id.startsWith('cl-');
-      const client=CLIENTS.find(c=>'wa-'+c.id===t.id||'cl-'+c.id===t.id);
-      if(client){
+
+  // ── Bucket tasks into display groups ────────────────────────────
+  const holidayRx=/easter|birthday|christmas|eid|diwali|wish|ramadan|hanukkah|new year/i;
+  const mandateRx=/mandate|real estate|property|offerin/i;
+  const luxuryRx =/dior|luxury|tea|event|private|dinner|gala|experience|jewel|art|auction|aviation/i;
+  const BUCKETS=[
+    {key:'holiday',  label:'Holiday & Wishes', tasks:[]},
+    {key:'mandates', label:'Mandates',          tasks:[]},
+    {key:'luxury',   label:'Luxury',            tasks:[]},
+    {key:'followups',label:'Follow-Ups',        tasks:[]},
+  ];
+  tasks.forEach(t=>{
+    const cam=t.camId?CAMPAIGNS.find(c=>c.id===t.camId):null;
+    let b;
+    if(cam){
+      if(cam.type==='Seasonal'||holidayRx.test(cam.name))      b=BUCKETS[0];
+      else if(cam.type==='Mandate'||mandateRx.test(cam.name))  b=BUCKETS[1];
+      else if(cam.type==='Event'  ||luxuryRx.test(cam.name))   b=BUCKETS[2];
+      else                                                       b=BUCKETS[3];
+    } else { b=BUCKETS[3]; }
+    b.tasks.push(t);
+  });
+
+  // ── Render each bucket with a subheading ────────────────────────
+  let gi=0;
+  BUCKETS.forEach(bucket=>{
+    if(!bucket.tasks.length) return;
+    const hdr=document.createElement('div');
+    hdr.className='task-group-hdr'; hdr.textContent=bucket.label;
+    list.appendChild(hdr);
+    bucket.tasks.forEach(t=>{
+      const isDone=doneTasks.has(t.id);
+      const el=document.createElement('div');
+      el.className=`tc ${isDone?'done':t.isCam?'campaign':t.urg} a`;
+      el.style.animationDelay=(gi++*0.04)+'s';
+      const avClass=t.isCam?'cam-av':'';
+      const avContent=t.isCam?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>':ini(t.nm);
+      el.innerHTML=`<div class="tc-av ${avClass}">${avContent}</div>
+        <div class="tc-body"><div class="tc-act">${t.act}</div><div class="tc-why">${t.why}</div></div>
+        <div class="chk ${isDone?'on':''}" onclick="tick('${t.id}',this,event)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>`;
+      if(t.isCam){
         el.onclick=(e)=>{ if(e.target.closest('.chk')) return;
-          if(isCall) logCall(client);
-          else openWaSheet(client,null);
+          const cam=CAMPAIGNS.find(c=>c.id===t.camId);
+          if(t.clientObj) openWaSheet(t.clientObj,cam);
+          else openCampaign(cam);
         };
+      } else {
+        const isCall=t.id.startsWith('cl-');
+        const client=CLIENTS.find(c=>'wa-'+c.id===t.id||'cl-'+c.id===t.id);
+        if(client){
+          el.onclick=(e)=>{ if(e.target.closest('.chk')) return;
+            if(isCall) logCall(client);
+            else openWaSheet(client,null);
+          };
+        }
       }
-    }
-    list.appendChild(el);
+      list.appendChild(el);
+    });
   });
 }
 
@@ -828,7 +859,7 @@ async function saveDeal(){
 }
 
 // ── WHATSAPP ──────────────────────────────────────────────────────
-let waCurrentClient=null, waCurrentCampaign=null, waAttachedFile=null, waAttachedDataUrl=null;
+let waCurrentClient=null, waCurrentCampaign=null;
 
 function openWaSheet(client, campaign){
   waCurrentClient=client; waCurrentCampaign=campaign;
@@ -836,16 +867,13 @@ function openWaSheet(client, campaign){
   av.textContent=ini(client.name);
   document.getElementById('wa-header-name').textContent=client.name;
   document.getElementById('wa-header-sub').textContent=campaign?campaign.name+' · '+(client.role||client.city):(client.role||client.city);
-  document.getElementById('wa-msg-box').value='';
   document.getElementById('wa-attach-section').innerHTML='';
-  waAttachedFile=null; waAttachedDataUrl=null;
   document.getElementById('wa-sheet-overlay').classList.add('open');
 
-  if(campaign&&campaign.template){
-    const msg=personaliseTemplate(campaign.template,client);
-    document.getElementById('wa-msg-box').value=msg;
-    updateWaBtn(msg); renderAttach(campaign);
-  } else { generateWaMsg(client,campaign); }
+  const msg=campaign&&campaign.template?personaliseTemplate(campaign.template,client):'';
+  document.getElementById('wa-msg-box').value=msg;
+  if(msg) updateWaBtn(msg);
+  renderAttach(campaign);
 }
 
 function personaliseTemplate(tpl, client){
@@ -853,91 +881,28 @@ function personaliseTemplate(tpl, client){
   return tpl.replace(/\[Name\]/gi,first).replace(/\[First Name\]/gi,first).replace(/\[Full Name\]/gi,client.name);
 }
 
-async function generateWaMsg(client, campaign){
-  const box=document.getElementById('wa-msg-box');
-  const gen=document.getElementById('wa-generating');
-  box.style.display='none'; gen.style.display='flex';
-  const first=client.name.split(' ')[0];
-  const camCtx=campaign?`This message is for the campaign: "${campaign.name}" (${campaign.type}). Campaign notes: ${campaign.notes||'N/A'}.`:`This is a general follow-up WhatsApp to a ${client.tier}-tier client.`;
-  const prompt=`You are Alicia Richardson, a luxury private client advisor at Albemarle Private. Write a short, warm, personalised WhatsApp message to ${client.name} (first name: ${first}).
-
-Client profile:
-- Role: ${client.role||'N/A'}
-- Location: ${client.city}
-- Net worth: ${client.nw}
-- Interests: ${(client.int||[]).join(', ')}
-- Religion/culture: ${client.rel}
-- Notes: ${client.notes||'N/A'}
-
-${camCtx}
-
-Rules:
-- Open with their first name, no "Dear"
-- Warm but brief — 3–5 sentences maximum
-- Luxury tone: understated, personal, never salesy
-- No emojis unless the campaign is celebratory
-- Do not mention commission or prices
-- End naturally, no sign-off needed
-- Output only the message text, nothing else`;
-  try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:300,messages:[{role:'user',content:prompt}]})});
-    const data=await resp.json();
-    const msg=data.content?.[0]?.text?.trim()||'Could not generate message — please write one above.';
-    box.value=msg; updateWaBtn(msg);
-  }catch(e){
-    box.value=`${first}, I hope you are keeping well. I wanted to reach out personally — please do let me know if there is anything I can assist with.`;
-    updateWaBtn(box.value);
-  }
-  gen.style.display='none'; box.style.display='block';
-  if(campaign) renderAttach(campaign);
-}
-
 function renderAttach(campaign){
   const section=document.getElementById('wa-attach-section');
-  if(!campaign){ section.innerHTML=''; return; }
-  if(waAttachedFile||campaign.attachment){
-    const name=waAttachedFile?waAttachedFile.name:campaign.attachment.name;
-    const isImg=/\.(png|jpg|jpeg|gif|webp)$/i.test(name);
-    section.innerHTML=`<div class="wa-attached-file">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round">${isImg?'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>':'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'}</svg>
-      <div class="wa-attached-name">${name}</div>
-      <span class="wa-attached-copy" onclick="copyAttachment()">Copy</span>
-      <span style="font-size:11px;color:var(--t3);cursor:pointer;padding:4px 6px" onclick="removeAttachment()">✕</span>
-    </div>`;
-  } else {
-    section.innerHTML=`<div class="wa-attach-area" onclick="document.getElementById('wa-file-input').click()">
-      <div class="wa-attach-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></div>
-      <div><div class="wa-attach-label">Attach Image or PDF</div><div class="wa-attach-sub">Select a file to include</div></div>
-    </div>
-    <input type="file" id="wa-file-input" accept="image/*,.pdf" style="display:none" onchange="handleFileAttach(event)">`;
-  }
-}
-
-function handleFileAttach(e){
-  const file=e.target.files[0]; if(!file) return;
-  waAttachedFile=file;
-  const reader=new FileReader();
-  reader.onload=ev=>{ waAttachedDataUrl=ev.target.result; renderAttach(waCurrentCampaign); };
-  reader.readAsDataURL(file);
+  if(!campaign||!campaign.attachment){ section.innerHTML=''; return; }
+  const name=campaign.attachment.name||'';
+  const isImg=/\.(png|jpg|jpeg|gif|webp)$/i.test(name);
+  if(!isImg){ section.innerHTML=''; return; }
+  section.innerHTML=`<div class="wa-attached-file">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+    <div class="wa-attached-name">${name}</div>
+    <span class="wa-attached-copy" onclick="copyAttachment()">Copy Image</span>
+  </div>`;
 }
 
 function copyAttachment(){
   const btn=document.querySelector('.wa-attached-copy');
-  const name=waAttachedFile?waAttachedFile.name:(waCurrentCampaign?.attachment?.name||'');
-  const isImg=/\.(png|jpg|jpeg|gif|webp)$/i.test(name);
-  const dataUrl=waAttachedDataUrl||waCurrentCampaign?.attachment?.dataUrl;
-  if(isImg&&dataUrl){
+  const dataUrl=waCurrentCampaign?.attachment?.dataUrl;
+  if(dataUrl){
     fetch(dataUrl).then(r=>r.blob()).then(blob=>{
-      try{ navigator.clipboard.write([new ClipboardItem({[blob.type]:blob})]).then(()=>{ btn.textContent='✓ Copied!'; setTimeout(()=>btn.textContent='Copy',2000); }); }
-      catch(err){ btn.textContent='⚠ Share instead'; setTimeout(()=>btn.textContent='Copy',2000); }
+      try{ navigator.clipboard.write([new ClipboardItem({[blob.type]:blob})]).then(()=>{ btn.textContent='✓ Copied!'; setTimeout(()=>btn.textContent='Copy Image',2000); }); }
+      catch(err){ btn.textContent='⚠ Share instead'; setTimeout(()=>btn.textContent='Copy Image',2000); }
     });
   }
-}
-
-function removeAttachment(){
-  waAttachedFile=null; waAttachedDataUrl=null;
-  if(waCurrentCampaign) waCurrentCampaign.attachment=null;
-  renderAttach(waCurrentCampaign);
 }
 
 function updateWaBtn(msg){ document.getElementById('wa-open-btn').href=`https://wa.me/?text=${encodeURIComponent(msg)}`; }
@@ -952,7 +917,6 @@ function copyWaMsg(){
   });
 }
 
-async function regenWaMsg(){ if(waCurrentClient) await generateWaMsg(waCurrentClient,waCurrentCampaign); }
 
 function closeWaSheet(e){ if(e.target===document.getElementById('wa-sheet-overlay')) document.getElementById('wa-sheet-overlay').classList.remove('open'); }
 
