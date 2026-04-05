@@ -986,13 +986,10 @@ function renderDealTasks(){
     <div class="deal-task-chk${t.done?' on':''}" onclick="toggleDealTask('${t.id}',${!t.done})">
       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="white"><polyline points="20 6 9 17 4 12"/></svg>
     </div>
-    <div class="deal-task-info">
+    <div class="deal-task-info" onclick="editModalDealTask('${t.id}',event)" style="cursor:pointer">
       <div class="deal-task-title-txt">${t.title}</div>
       ${t.due_date?`<div class="deal-task-due">${t.due_date}</div>`:''}
     </div>
-    <button class="dt-edit-btn" onclick="editModalDealTask('${t.id}',event)" title="Edit">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-    </button>
   </div>`).join('');
 }
 
