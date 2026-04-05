@@ -48,6 +48,9 @@ let homeTab='deals', homeDealTasks=null;
 let doneDealTasksToday = 0;
 let addingCampaignId=null;
 let ncam_imageData=null, ecam_imageData=null;
+let camCompletions = new Set(); // 'type:id' keys
+let openCampaignId = null;
+let addCamTab='clients';
 
 // ── HELPERS ───────────────────────────────────────────────────────
 const ini = n => n.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
@@ -120,6 +123,10 @@ function normaliseCampaign(r){
     template: r.template||null,
     waImage: r.wa_image||null,
     manualClientIds: r.manual_client_ids||[],
+    manualPartnerIds: r.manual_partner_ids||[],
+    manualRecIds: r.manual_rec_ids||[],
+    includeAllPartners: r.include_all_partners||false,
+    includeAllRolodex: r.include_all_rolodex||false,
   };
 }
 
@@ -169,6 +176,23 @@ function getCampaignClients(cam){
     CLIENTS.filter(c=>cam.manualClientIds.includes(c.id)&&!existing.has(c.id)).forEach(c=>filtered.push(c));
   }
   return filtered;
+}
+
+function getCampaignContacts(cam){
+  // Returns all enrolled contacts across clients, partners, recs
+  const contacts=[];
+  getCampaignClients(cam).forEach(c=>
+    contacts.push({type:'client',id:c.id,name:c.name,sub:(c.role||c.city||''),av:ini(c.name),avStyle:'',obj:c})
+  );
+  const pList=cam.includeAllPartners?PARTNERS:PARTNERS.filter(p=>(cam.manualPartnerIds||[]).includes(p.id));
+  pList.forEach(p=>
+    contacts.push({type:'partner',id:p.id,name:p.name,sub:p.cat||'',av:abbr(p.name),avStyle:'border-radius:10px',obj:p})
+  );
+  const rList=cam.includeAllRolodex?RECS:RECS.filter(r=>(cam.manualRecIds||[]).includes(r.id));
+  rList.forEach(r=>
+    contacts.push({type:'rec',id:r.id,name:r.company,sub:r.contact||r.category||'',av:(r.company||'?')[0],avStyle:'border-radius:10px;background:rgba(42,95,168,0.09);border-color:rgba(42,95,168,0.22);color:var(--blue)',obj:r})
+  );
+  return contacts;
 }
 
 function mkTasks(){
@@ -584,7 +608,7 @@ function rCampaigns(){
     hdr.className='cam-group-hdr'; hdr.textContent=group.label;
     list.appendChild(hdr);
     group.cams.forEach(cam=>{
-      const cnt=getCampaignClients(cam).length;
+      const cnt=getCampaignContacts(cam).length;
       const el=document.createElement('div');
       el.className='camc gc a'; el.style.animationDelay=(gi++*0.05)+'s';
       el.onclick=()=>openCampaign(cam);
@@ -596,22 +620,56 @@ function rCampaigns(){
       <div class="camc-foot">
         ${cam.date?`<span class="pill p-gh">${cam.date}</span>`:''}
         ${cam.seg?`<span class="pill p-gold">Seg: ${cam.seg}</span>`:''}
-        <span class="pill p-grn">${cnt} clients</span>
+        <span class="pill p-grn">${cnt} contacts</span>
       </div>`;
       list.appendChild(el);
     });
   });
 }
 
-function openCampaign(cam){
-  const clients=getCampaignClients(cam);
-  const rosterHtml=clients.length
-    ? clients.map(c=>`<div class="cam-roster-item a">
-        <div class="cri-av">${ini(c.name)}</div>
-        <div><div class="cri-name">${c.name}</div><div class="cri-sub">${c.role||c.city||''} · ${c.tier}</div></div>
-        <div style="margin-left:auto"><span class="pill" style="background:${TC[c.tier]||'#888'}18;color:${TC[c.tier]||'#888'};border-color:${TC[c.tier]||'#888'}40;font-size:9px">${c.tier}</span></div>
-      </div>`).join('')
-    : '<div style="padding:16px;font-size:13px;color:var(--t3);font-style:italic">No clients match this segment.</div>';
+async function openCampaign(cam){
+  openCampaignId=cam.id;
+  camCompletions=new Set();
+  document.getElementById('ps-campaign-body').innerHTML=`
+    <div class="prof-back-row">
+      <div class="prof-back" onclick="closeProf('ps-campaign')">
+        <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 1L1 7l6 6"/></svg><span>Campaigns</span>
+      </div>
+      <button class="prof-edit-btn" onclick="openEditCampaign('${cam.id}')">Edit</button>
+    </div>
+    <div style="padding:40px 20px;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>`;
+  pushProf('ps-campaign');
+  const {data}=await SB.from('campaign_completions').select('contact_type,contact_id').eq('campaign_id',cam.id);
+  camCompletions=new Set((data||[]).map(r=>r.contact_type+':'+r.contact_id));
+  renderCampaignProfile(cam);
+}
+
+function renderCampaignProfile(cam){
+  const allContacts=getCampaignContacts(cam);
+  const total=allContacts.length;
+  const doneCount=allContacts.filter(c=>camCompletions.has(c.type+':'+c.id)).length;
+
+  // Sort: pending first, done last
+  allContacts.sort((a,b)=>{
+    const aD=camCompletions.has(a.type+':'+a.id);
+    const bD=camCompletions.has(b.type+':'+b.id);
+    return aD===bD?0:aD?1:-1;
+  });
+
+  const rosterHtml=allContacts.length?allContacts.map((c,i)=>{
+    const done=camCompletions.has(c.type+':'+c.id);
+    // Add a "Done" divider before first completed item
+    const prefix=(done&&(i===0||!camCompletions.has(allContacts[i-1]?.type+':'+allContacts[i-1]?.id)))
+      ?`<div class="cam-done-divider">Completed · ${doneCount}</div>`:'';
+    return `${prefix}<div class="cam-roster-item${done?' done':''} a">
+      <div class="cri-av" style="${c.avStyle}">${c.av}</div>
+      <div style="flex:1;min-width:0"><div class="cri-name">${c.name}</div><div class="cri-sub">${c.sub}</div></div>
+      <div class="cri-check${done?' on':''}" onclick="toggleCamCompletion('${cam.id}','${c.type}','${c.id}')">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+    </div>`;
+  }).join('')
+  :'<div style="padding:16px;font-size:13px;color:var(--t3);font-style:italic">No contacts enrolled yet.</div>';
 
   document.getElementById('ps-campaign-body').innerHTML=`
     <div class="prof-back-row">
@@ -631,47 +689,121 @@ function openCampaign(cam){
         <span class="pill ${CC[cam.type]||'p-gh'}">${cam.type}</span>
         ${cam.seg?`<span class="pill p-gold">Segment: ${cam.seg}</span>`:''}
         ${cam.occ?`<span class="pill p-amb">${cam.occ}</span>`:''}
-        <span class="pill p-grn">${clients.length} enrolled</span>
+        <span class="pill p-grn">${total} enrolled</span>
+        ${doneCount?`<span class="pill p-gold">${doneCount} done</span>`:''}
       </div>
     </div>
     ${cam.notes?`<div class="prof-sec"><div class="sec-lbl">Campaign Brief</div><div class="sec-notes">${cam.notes}</div></div>`:''}
     <div class="prof-sec">
       <div class="sec-lbl" style="display:flex;justify-content:space-between;align-items:center">
-        <span>Enrolled Clients · ${clients.length}</span>
-        <span style="font-size:11px;color:var(--gold);font-weight:600;cursor:pointer" onclick="openAddCamClient('${cam.id}')">+ Add Client</span>
+        <span>Contacts · ${total}</span>
+        <span style="font-size:11px;color:var(--gold);font-weight:600;cursor:pointer" onclick="openAddCamClient('${cam.id}')">+ Add</span>
       </div>
       ${rosterHtml}
     </div>
     <div style="height:36px"></div>`;
-  pushProf('ps-campaign');
 }
 
-// ── ADD CLIENT TO CAMPAIGN ────────────────────────────────────────
-function openAddCamClient(camId){
-  addingCampaignId=camId;
+async function toggleCamCompletion(camId, ctype, cid){
+  const key=ctype+':'+cid;
+  if(camCompletions.has(key)){
+    await SB.from('campaign_completions').delete()
+      .eq('campaign_id',camId).eq('contact_type',ctype).eq('contact_id',cid);
+    camCompletions.delete(key);
+  } else {
+    await SB.from('campaign_completions').upsert(
+      {campaign_id:camId,contact_type:ctype,contact_id:cid},
+      {onConflict:'campaign_id,contact_type,contact_id'}
+    );
+    camCompletions.add(key);
+  }
   const cam=CAMPAIGNS.find(c=>c.id===camId);
-  const existing=getCampaignClients(cam).map(c=>c.id);
-  const list=document.getElementById('add-cam-client-list');
-  list.innerHTML=CLIENTS.map(c=>`<div class="cam-roster-item a" onclick="toggleCamClient('${c.id}','${camId}',this)">
-    <div class="cri-av">${ini(c.name)}</div>
-    <div style="flex:1"><div class="cri-name">${c.name}</div><div class="cri-sub">${c.role||c.city||''} · ${c.tier}</div></div>
-    ${existing.includes(c.id)?'<span class="pill p-grn" style="font-size:9px">Enrolled</span>':'<span class="pill p-gh" style="font-size:9px">Add</span>'}
-  </div>`).join('');
+  if(cam) renderCampaignProfile(cam);
+}
+
+// ── ADD CONTACTS TO CAMPAIGN ──────────────────────────────────────
+function openAddCamClient(camId){
+  addingCampaignId=camId; addCamTab='clients';
+  document.querySelectorAll('.add-cam-tab').forEach((t,i)=>t.classList.toggle('on',i===0));
+  renderAddCamList();
   openModal('modal-add-cam-client');
 }
 
-async function toggleCamClient(clientId,camId,el){
+function renderAddCamList(){
+  const cam=CAMPAIGNS.find(c=>c.id===addingCampaignId); if(!cam) return;
+  const list=document.getElementById('add-cam-client-list');
+  if(addCamTab==='clients'){
+    const segClients=getCampaignClients(cam).map(c=>c.id);
+    list.innerHTML=CLIENTS.map(c=>{
+      const enrolled=segClients.includes(c.id)||(cam.manualClientIds||[]).includes(c.id);
+      return `<div class="cam-roster-item" onclick="toggleCamContact('client','${c.id}','${cam.id}')">
+        <div class="cri-av">${ini(c.name)}</div>
+        <div style="flex:1;min-width:0"><div class="cri-name">${c.name}</div><div class="cri-sub">${c.role||c.city||''}</div></div>
+        <span class="pill ${enrolled?'p-grn':'p-gh'}" style="font-size:9px">${enrolled?'Enrolled':'Add'}</span>
+      </div>`;
+    }).join('');
+  } else if(addCamTab==='partners'){
+    list.innerHTML=`<div class="cam-roster-item" style="background:rgba(138,109,62,0.05)" onclick="toggleCamGroup('partners','${cam.id}')">
+      <div class="cri-av" style="border-radius:10px;font-size:12px">All</div>
+      <div style="flex:1;min-width:0"><div class="cri-name">All Partners</div><div class="cri-sub">${PARTNERS.length} partners</div></div>
+      <span class="pill ${cam.includeAllPartners?'p-grn':'p-gh'}" style="font-size:9px">${cam.includeAllPartners?'Enrolled':'Add Group'}</span>
+    </div>`+PARTNERS.map(p=>{
+      const enrolled=(cam.manualPartnerIds||[]).includes(p.id)||cam.includeAllPartners;
+      return `<div class="cam-roster-item" onclick="toggleCamContact('partner','${p.id}','${cam.id}')">
+        <div class="cri-av" style="border-radius:10px">${abbr(p.name)}</div>
+        <div style="flex:1;min-width:0"><div class="cri-name">${p.name}</div><div class="cri-sub">${p.cat||''}</div></div>
+        <span class="pill ${enrolled?'p-grn':'p-gh'}" style="font-size:9px">${enrolled?'Enrolled':'Add'}</span>
+      </div>`;
+    }).join('');
+  } else if(addCamTab==='rolodex'){
+    list.innerHTML=`<div class="cam-roster-item" style="background:rgba(42,95,168,0.04)" onclick="toggleCamGroup('rolodex','${cam.id}')">
+      <div class="cri-av" style="border-radius:10px;background:rgba(42,95,168,0.09);color:var(--blue);font-size:12px">All</div>
+      <div style="flex:1;min-width:0"><div class="cri-name">All Rolodex</div><div class="cri-sub">${RECS.length} entries</div></div>
+      <span class="pill ${cam.includeAllRolodex?'p-grn':'p-gh'}" style="font-size:9px">${cam.includeAllRolodex?'Enrolled':'Add Group'}</span>
+    </div>`+RECS.map(r=>{
+      const enrolled=(cam.manualRecIds||[]).includes(r.id)||cam.includeAllRolodex;
+      return `<div class="cam-roster-item" onclick="toggleCamContact('rec','${r.id}','${cam.id}')">
+        <div class="cri-av" style="border-radius:10px;background:rgba(42,95,168,0.09);color:var(--blue)">${(r.company||'?')[0]}</div>
+        <div style="flex:1;min-width:0"><div class="cri-name">${r.company}</div><div class="cri-sub">${r.contact||r.category||''}</div></div>
+        <span class="pill ${enrolled?'p-grn':'p-gh'}" style="font-size:9px">${enrolled?'Enrolled':'Add'}</span>
+      </div>`;
+    }).join('');
+  }
+}
+
+function switchAddCamTab(el,tab){
+  addCamTab=tab;
+  document.querySelectorAll('.add-cam-tab').forEach(t=>t.classList.toggle('on',t===el));
+  renderAddCamList();
+}
+
+async function toggleCamContact(type, contactId, camId){
   const cam=CAMPAIGNS.find(c=>c.id===camId); if(!cam) return;
-  const ids=[...(cam.manualClientIds||[])];
-  const idx=ids.indexOf(clientId);
-  if(idx>-1) ids.splice(idx,1);
-  else ids.push(clientId);
-  const {error}=await SB.from('campaigns').update({manual_client_ids:ids}).eq('id',camId);
+  let field, ids;
+  if(type==='client'){ field='manual_client_ids'; ids=[...(cam.manualClientIds||[])]; }
+  else if(type==='partner'){ field='manual_partner_ids'; ids=[...(cam.manualPartnerIds||[])]; }
+  else { field='manual_rec_ids'; ids=[...(cam.manualRecIds||[])]; }
+  const idx=ids.indexOf(contactId);
+  if(idx>-1) ids.splice(idx,1); else ids.push(contactId);
+  const {error}=await SB.from('campaigns').update({[field]:ids}).eq('id',camId);
   if(error){ showToast('Error updating'); return; }
-  cam.manualClientIds=ids;
-  closeModal('modal-add-cam-client');
-  openCampaign(cam);
-  showToast(idx>-1?'Client removed':'Client added ✓');
+  if(type==='client') cam.manualClientIds=ids;
+  else if(type==='partner') cam.manualPartnerIds=ids;
+  else cam.manualRecIds=ids;
+  renderAddCamList();
+  showToast(idx>-1?'Removed':'Added ✓');
+}
+
+async function toggleCamGroup(groupType, camId){
+  const cam=CAMPAIGNS.find(c=>c.id===camId); if(!cam) return;
+  const field=groupType==='partners'?'include_all_partners':'include_all_rolodex';
+  const current=groupType==='partners'?cam.includeAllPartners:cam.includeAllRolodex;
+  const {error}=await SB.from('campaigns').update({[field]:!current}).eq('id',camId);
+  if(error){ showToast('Error'); return; }
+  if(groupType==='partners') cam.includeAllPartners=!current;
+  else cam.includeAllRolodex=!current;
+  renderAddCamList();
+  showToast(!current?'Group added ✓':'Group removed');
 }
 
 // ── CLIENTS ───────────────────────────────────────────────────────
@@ -1323,7 +1455,7 @@ async function saveEditCampaign(){
   const {error}=await SB.from('campaigns').update(updates).eq('id',editCampaignId);
   if(error){ alert('Error: '+error.message); return; }
   ecam_imageData=null;
-  Object.assign(cam, normaliseCampaign({...updates, id:editCampaignId, wa_image:updates.wa_image||cam.waImage, manual_client_ids:cam.manualClientIds}));
+  Object.assign(cam, normaliseCampaign({...updates, id:editCampaignId, wa_image:updates.wa_image||cam.waImage, manual_client_ids:cam.manualClientIds, manual_partner_ids:cam.manualPartnerIds, manual_rec_ids:cam.manualRecIds, include_all_partners:cam.includeAllPartners, include_all_rolodex:cam.includeAllRolodex}));
   closeModal('modal-edit-campaign');
   openCampaign(cam); if(curTab==='campaigns') rCampaigns();
   showToast('Campaign updated ✓');

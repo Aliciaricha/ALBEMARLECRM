@@ -321,3 +321,15 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .settings-rel-field label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t3); display: block; margin-bottom: 5px; }
 .settings-input { width: 100%; padding: 8px 10px; border-radius: var(--r-sm); border: 0.5px solid rgba(0,0,0,0.10); background: rgba(255,255,255,0.80); font-family: 'Manrope'; font-size: 13px; color: var(--t1); outline: none; -webkit-appearance: none; }
 .settings-input:focus { border-color: var(--gold); }
+
+/* Campaign add tabs */
+.add-cam-tabs { display: flex; padding: 0 20px 0; border-bottom: 0.5px solid rgba(0,0,0,0.06); margin-bottom: 4px; }
+.add-cam-tab { flex: 1; text-align: center; padding: 10px 0; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t3); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+.add-cam-tab.on { color: var(--gold); border-bottom-color: var(--gold); }
+/* Campaign roster completion */
+.cri-check { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid rgba(138,109,62,0.30); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; flex-shrink: 0; margin-left: 8px; }
+.cri-check.on { background: var(--gold); border-color: var(--gold); }
+.cri-check svg { opacity: 0; stroke: white; transition: opacity 0.15s; }
+.cri-check.on svg { opacity: 1; }
+.cam-roster-item.done { opacity: 0.50; }
+.cam-done-divider { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3); padding: 14px 0 6px; }
