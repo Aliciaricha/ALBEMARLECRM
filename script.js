@@ -25,7 +25,7 @@ let tF='All', cF='All', curTab='home';
 let selSegVal='All', editSegVal='All';
 let editClientId=null, editPartnerId=null, editCampaignId=null;
 let editingDealId=null;
-let homeTab='network', homeDealTasks=null;
+let homeTab='deals', homeDealTasks=null;
 
 // ── HELPERS ───────────────────────────────────────────────────────
 const ini = n => n.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
@@ -129,7 +129,7 @@ function mkTasks(){
   const activeCams = CAMPAIGNS.filter(c=>{
     if(c.date==='Ongoing') return true;
     if(c.date==='TBC') return false;
-    try{ const d=new Date(c.date); const diff=Math.floor((d-TODAY)/86400000); if(c.type==='Triggered') return diff===0; return diff>=-3&&diff<=30; }catch(e){ return false; }
+    try{ const d=new Date(c.date); const diff=Math.floor((d-TODAY)/86400000); if(c.type==='Triggered') return diff>=0&&diff<=3; return diff>=-3&&diff<=30; }catch(e){ return false; }
   });
 
   const camCovered = new Map();
@@ -143,8 +143,13 @@ function mkTasks(){
 
     if(camCovered.has(c.id)){
       const cam=camCovered.get(c.id);
+      let camWhy='Campaign · '+cam.type+(cam.date!=='Ongoing'?' · '+cam.date:'');
+      if(cam.type==='Triggered'&&cam.date){
+        const du=Math.floor((new Date(cam.date)-TODAY)/86400000);
+        camWhy=du===0?'Today!':du===1?'Tomorrow':`In ${du} days`;
+      }
       t.push({id:'cam-'+cam.id+'-'+c.id, nm:c.name, act:cam.name+' — '+c.name,
-        why:'Campaign · '+cam.type+(cam.date!=='Ongoing'?' · '+cam.date:''),
+        why:camWhy,
         urg:'soon', pri:(tr.p*10)+2, isCam:true, camId:cam.id, clientObj:c});
       return;
     }
@@ -167,8 +172,13 @@ function mkTasks(){
     const alreadyIn=t.some(x=>x.camId===cam.id);
     if(!alreadyIn){
       const cnt=getCampaignClients(cam).length;
+      let standaloneWhy=cnt+' clients · '+cam.type+(cam.date!=='Ongoing'?' · '+cam.date:'');
+      if(cam.type==='Triggered'&&cam.date){
+        const du=Math.floor((new Date(cam.date)-TODAY)/86400000);
+        standaloneWhy=cnt+' clients · '+(du===0?'Today!':du===1?'Tomorrow':`In ${du} days`);
+      }
       t.push({id:'cam-'+cam.id, nm:'Campaign', act:cam.name,
-        why:cnt+' clients · '+cam.type+(cam.date!=='Ongoing'?' · '+cam.date:''),
+        why:standaloneWhy,
         urg:'soon', pri:25, isCam:true, camId:cam.id, clientObj:null});
     }
   });
@@ -270,6 +280,19 @@ function switchHomeTab(tab){
   rHome();
 }
 
+function dealTaskTimer(dueDate){
+  if(!dueDate) return '';
+  const today=new Date(); today.setHours(0,0,0,0);
+  const due=new Date(dueDate); due.setHours(0,0,0,0);
+  const diff=Math.floor((due-today)/86400000);
+  if(diff>1)   return `<span class="dt-timer">Due in ${diff}d</span>`;
+  if(diff===1)  return `<span class="dt-timer dt-tomorrow">Due tomorrow</span>`;
+  if(diff===0)  return `<span class="dt-timer dt-today">Due today</span>`;
+  const over=Math.abs(diff);
+  if(over<=3)   return `<span class="dt-timer dt-grace">${over}d overdue</span>`;
+  return `<span class="dt-timer dt-late">${over} days overdue</span>`;
+}
+
 async function renderHomeDealTasks(){
   const list=document.getElementById('task-list');
   if(homeDealTasks===null){
@@ -282,22 +305,69 @@ async function renderHomeDealTasks(){
     list.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding deal tasks.</div>';
     return;
   }
-  homeDealTasks.forEach((t,i)=>{
+
+  // ── Group by deal category ──────────────────────────────────────
+  const catMap=new Map();
+  homeDealTasks.forEach(t=>{
     const deal=DEALS.find(d=>d.id===t.deal_id);
-    const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
-    const why=[client?client.name:'', t.due_date?'Due '+t.due_date:''].filter(Boolean).join(' · ');
-    const el=document.createElement('div');
-    el.className='tc normal a'; el.style.animationDelay=(i*0.04)+'s';
-    el.innerHTML=`<div class="tc-av deal-tc-av">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-      </div>
-      <div class="tc-body"><div class="tc-act">${t.title}</div><div class="tc-why">${why}</div></div>
-      <div class="chk" onclick="tickDealTask('${t.id}',this,event)">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-      </div>`;
-    if(deal) el.onclick=(e)=>{if(e.target.closest('.chk')) return; openDealModal(deal.clientId,deal.id);};
-    list.appendChild(el);
+    const cat=deal?deal.cat:'Other';
+    if(!catMap.has(cat)) catMap.set(cat,[]);
+    catMap.get(cat).push({t,deal});
   });
+
+  let gi=0;
+  catMap.forEach((items,cat)=>{
+    const hdr=document.createElement('div');
+    hdr.className='task-group-hdr'; hdr.textContent=cat;
+    list.appendChild(hdr);
+    items.forEach(({t,deal})=>{
+      const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
+      const cname=client?client.name:'';
+      const act=cname?`${t.title} \u2014 ${cname}`:t.title;
+      const el=document.createElement('div');
+      el.className='tc normal a'; el.style.animationDelay=(gi++*0.04)+'s';
+      el.innerHTML=`<div class="tc-av deal-tc-av">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <div class="tc-body"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
+        <button class="dt-edit-btn" onclick="editDealTask('${t.id}',event)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <div class="chk" onclick="tickDealTask('${t.id}',this,event)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>`;
+      if(deal) el.onclick=(e)=>{if(e.target.closest('.chk')||e.target.closest('.dt-edit-btn')) return; openDealModal(deal.clientId,deal.id);};
+      list.appendChild(el);
+    });
+  });
+}
+
+function editDealTask(id,e){
+  e.stopPropagation();
+  const t=homeDealTasks.find(x=>x.id===id); if(!t) return;
+  const card=e.target.closest('.tc');
+  card.innerHTML=`<div class="dt-edit-form">
+    <input class="dt-edit-input" id="dte-title-${id}" value="${t.title.replace(/"/g,'&quot;')}" placeholder="Task title…">
+    <input type="date" class="dt-edit-date" id="dte-date-${id}" value="${t.due_date||''}">
+    <div class="dt-edit-actions">
+      <button class="dt-save-btn" onclick="saveDealTaskEdit('${id}')">Save</button>
+      <span class="dt-cancel-btn" onclick="renderHomeDealTasks()">Cancel</span>
+    </div>
+  </div>`;
+  document.getElementById('dte-title-'+id).focus();
+}
+
+async function saveDealTaskEdit(id){
+  const titleEl=document.getElementById('dte-title-'+id);
+  const dateEl=document.getElementById('dte-date-'+id);
+  const title=titleEl?.value.trim(); if(!title) return;
+  const due=dateEl?.value||null;
+  const btn=document.querySelector('.dt-save-btn'); if(btn){btn.textContent='…';btn.disabled=true;}
+  const {error}=await SB.from('deal_tasks').update({title,due_date:due}).eq('id',id);
+  if(error){ showToast('Could not update task'); renderHomeDealTasks(); return; }
+  const t=homeDealTasks.find(x=>x.id===id);
+  if(t){ t.title=title; t.due_date=due; }
+  renderHomeDealTasks(); showToast('Task updated ✓');
 }
 
 async function tickDealTask(id,el,e){

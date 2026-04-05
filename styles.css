@@ -68,6 +68,19 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .home-toggle-btn { flex: 1; padding: 8px 0; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--t3); border-radius: 19px; cursor: pointer; transition: all 0.22s cubic-bezier(0.32,0.72,0,1); user-select: none; -webkit-user-select: none; }
 .home-toggle-btn.on { background: rgba(255,255,255,0.92); color: var(--t1); box-shadow: 0 1px 8px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,1); }
 .deal-tc-av { background: rgba(138,109,62,0.10); border-color: rgba(138,109,62,0.22); color: var(--gold); }
+.dt-timer { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: rgba(0,0,0,0.05); color: var(--t3); }
+.dt-timer.dt-tomorrow { background: rgba(212,175,55,0.13); color: var(--gold); }
+.dt-timer.dt-today { background: rgba(42,168,80,0.13); color: var(--green); }
+.dt-timer.dt-grace { background: rgba(212,175,55,0.15); color: #b87020; }
+.dt-timer.dt-late { background: rgba(210,40,40,0.10); color: var(--red); font-weight: 700; }
+.dt-edit-btn { background: none; border: none; padding: 5px 6px; cursor: pointer; color: var(--t3); flex-shrink: 0; border-radius: 7px; line-height: 0; transition: color 0.15s; }
+.dt-edit-btn:active { color: var(--gold); }
+.dt-edit-form { width: 100%; display: flex; flex-direction: column; gap: 9px; }
+.dt-edit-input,.dt-edit-date { width: 100%; padding: 9px 12px; border-radius: var(--r-sm); border: 0.5px solid rgba(0,0,0,0.10); background: rgba(255,255,255,0.85); font-family: 'Manrope'; font-size: 13px; color: var(--t1); outline: none; box-sizing: border-box; -webkit-appearance: none; transition: border-color 0.15s; }
+.dt-edit-input:focus,.dt-edit-date:focus { border-color: var(--gold); }
+.dt-edit-actions { display: flex; align-items: center; gap: 12px; }
+.dt-save-btn { padding: 7px 18px; border-radius: var(--r-sm); border: none; background: var(--gold); color: white; font-family: 'Manrope'; font-size: 12px; font-weight: 600; cursor: pointer; }
+.dt-cancel-btn { font-size: 12px; color: var(--t3); cursor: pointer; padding: 4px; }
 .tasks { padding: 0 16px; display: flex; flex-direction: column; gap: 9px; }
 .tc { display: flex; align-items: center; gap: 13px; padding: 13px 14px; border-radius: var(--r-md); cursor: pointer; position: relative; overflow: hidden; transition: transform 0.14s; background: rgba(255,255,255,0.52); backdrop-filter: blur(24px) saturate(1.8); -webkit-backdrop-filter: blur(24px) saturate(1.8); border: 0.5px solid rgba(255,255,255,0.78); box-shadow: var(--sh), inset 0 1px 0 rgba(255,255,255,0.70); }
 .tc::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; }
