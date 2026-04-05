@@ -281,3 +281,26 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 
 @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
 .a { animation: fadeIn 0.3s ease both; }
+
+/* Client stats row */
+.cli-stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; padding: 0 16px 14px; }
+.cli-stat { text-align: center; padding: 10px 6px; border-radius: var(--r-md); background: rgba(255,255,255,0.52); backdrop-filter: blur(24px) saturate(1.8); -webkit-backdrop-filter: blur(24px) saturate(1.8); border: 0.5px solid rgba(255,255,255,0.80); box-shadow: var(--sh); }
+.cli-stat-n { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--t1); }
+.cli-stat-n.g { color: var(--gold); }
+.cli-stat-l { font-size: 8px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t3); margin-top: 2px; }
+
+/* Campaign group headers */
+.cam-group-hdr { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--t3); padding: 0 16px; margin: 20px 0 8px; }
+.cam-group-hdr:first-child { margin-top: 0; }
+
+/* Recommendation notes */
+.rec-notes { font-size: 11px; color: var(--t3); margin-top: 3px; line-height: 1.5; }
+
+/* Settings */
+.settings-rel-row { padding: 14px 0; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
+.settings-rel-row:last-child { border-bottom: none; }
+.settings-rel-label { font-size: 13px; font-weight: 600; color: var(--t1); margin-bottom: 10px; }
+.settings-rel-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.settings-rel-field label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t3); display: block; margin-bottom: 5px; }
+.settings-input { width: 100%; padding: 8px 10px; border-radius: var(--r-sm); border: 0.5px solid rgba(0,0,0,0.10); background: rgba(255,255,255,0.80); font-family: 'Manrope'; font-size: 13px; color: var(--t1); outline: none; -webkit-appearance: none; }
+.settings-input:focus { border-color: var(--gold); }

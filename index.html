@@ -116,12 +116,21 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input type="text" id="cli-q" placeholder="Search clients…" oninput="rClients()">
       </div>
+      <div class="cli-stats-row" id="cli-stats"></div>
       <div class="chips" id="t-chips">
         <div class="chip on" onclick="setF(this,'t','All')">All</div>
         <div class="chip" onclick="setF(this,'t','Top')">Top</div>
         <div class="chip" onclick="setF(this,'t','Active')">Active</div>
         <div class="chip" onclick="setF(this,'t','Warm')">Warm</div>
         <div class="chip" onclick="setF(this,'t','Sleeper')">Sleeper</div>
+      </div>
+      <div class="chips" id="r-chips">
+        <div class="chip on" onclick="setRelF(this,'All')">All</div>
+        <div class="chip" onclick="setRelF(this,'Personal')">Personal</div>
+        <div class="chip" onclick="setRelF(this,'Close')">Close</div>
+        <div class="chip" onclick="setRelF(this,'General')">General</div>
+        <div class="chip" onclick="setRelF(this,'Proxy')">Proxy</div>
+        <div class="chip" onclick="setRelF(this,'Archive')">Archive</div>
       </div>
       <div class="plist" id="cli-list"></div>
       <div style="height:24px"></div>
@@ -157,9 +166,26 @@
       <div class="ph">
         <div class="ph-row">
           <div><div class="ph-eye">Luxury Rolodex</div><div class="ph-title">Recommendations</div></div>
+          <button class="add-btn" onclick="openModal('modal-rec')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add
+          </button>
         </div>
       </div>
       <div id="rec-list"></div>
+      <div style="height:24px"></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="screen hidden" id="s-settings">
+      <div class="ph">
+        <div><div class="ph-eye">Preferences</div><div class="ph-title">Settings</div></div>
+      </div>
+      <div style="padding:0 16px">
+        <div class="sl" style="padding:0;margin-bottom:12px">Relationship Cadences</div>
+        <div class="gc-s" style="border-radius:var(--r-xl);padding:4px 18px 12px;margin-bottom:16px" id="settings-cadences"></div>
+        <button class="form-submit" onclick="saveSettings()" style="margin-bottom:10px">Save Settings</button>
+        <button class="form-submit" onclick="resetSettings()" style="background:rgba(0,0,0,0.06);color:var(--t2)">Reset to Defaults</button>
+      </div>
       <div style="height:24px"></div>
     </div>
 
@@ -195,6 +221,10 @@
       <div class="ti-ico"><svg width="20" height="20" viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></div>
       <span class="ti-lbl">Rolodex</span>
     </button>
+    <button class="ti" id="tab-settings" onclick="go('settings')">
+      <div class="ti-ico"><svg width="20" height="20" viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+      <span class="ti-lbl">Settings</span>
+    </button>
   </div>
 </div>
 
@@ -226,7 +256,7 @@
           <select id="nc-rel"><option>Unknown</option><option>Muslim</option><option>Christian</option><option>Hindu</option><option>Jewish</option><option>Other</option></select>
         </div>
         <div class="form-field"><label>Relationship</label>
-          <select id="nc-rel2"><option>Meeting</option><option>Phone</option><option>Friend</option><option>Personal</option><option>Mediated</option></select>
+          <select id="nc-rel2"><option>Personal</option><option>Close</option><option>General</option><option>Proxy</option><option>Archive</option></select>
         </div>
       </div>
       <div class="form-field"><label>Interests (comma separated)</label><input type="text" id="nc-int" placeholder="e.g. Real Estate, Jewellery"></div>
@@ -266,7 +296,7 @@
           <select id="ec-rel"><option>Unknown</option><option>Muslim</option><option>Christian</option><option>Hindu</option><option>Jewish</option><option>Other</option></select>
         </div>
         <div class="form-field"><label>Relationship</label>
-          <select id="ec-rel2"><option>Meeting</option><option>Phone</option><option>Friend</option><option>Personal</option><option>Mediated</option></select>
+          <select id="ec-rel2"><option>Personal</option><option>Close</option><option>General</option><option>Proxy</option><option>Archive</option></select>
         </div>
       </div>
       <div class="form-field"><label>Interests (comma separated)</label><input type="text" id="ec-int"></div>
@@ -352,7 +382,7 @@
       <div class="form-field"><label>Campaign Title</label><input type="text" id="ncam-name" placeholder="Campaign name"></div>
       <div class="form-row">
         <div class="form-field"><label>Type</label>
-          <select id="ncam-type"><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
+          <select id="ncam-type"><option>Follow-Up</option><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
         </div>
         <div class="form-field"><label>Date</label><input type="text" id="ncam-date" placeholder="e.g. 20 Apr 2026"></div>
       </div>
@@ -379,6 +409,10 @@
           <button class="tmpl-gen-btn" onclick="genCampaignTemplate('ncam')">✦ Generate</button>
         </div>
       </div>
+      <div class="form-field"><label>WhatsApp Image (optional)</label>
+        <input type="file" id="ncam-image" accept="image/*" onchange="previewCamImage('ncam')" style="-webkit-appearance:auto;font-size:12px;color:var(--t2)">
+        <div id="ncam-image-preview"></div>
+      </div>
     </div>
     <div class="form-footer">
       <button class="form-submit" onclick="saveCampaign()">Add Campaign</button>
@@ -396,7 +430,7 @@
       <div class="form-field"><label>Campaign Title</label><input type="text" id="ecam-name"></div>
       <div class="form-row">
         <div class="form-field"><label>Type</label>
-          <select id="ecam-type"><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
+          <select id="ecam-type"><option>Follow-Up</option><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
         </div>
         <div class="form-field"><label>Date</label><input type="text" id="ecam-date"></div>
       </div>
@@ -422,6 +456,10 @@
           <textarea id="ecam-template" style="min-height:110px;padding-bottom:40px"></textarea>
           <button class="tmpl-gen-btn" onclick="genCampaignTemplate('ecam')">✦ Generate</button>
         </div>
+      </div>
+      <div class="form-field"><label>WhatsApp Image (optional)</label>
+        <input type="file" id="ecam-image" accept="image/*" onchange="previewCamImage('ecam')" style="-webkit-appearance:auto;font-size:12px;color:var(--t2)">
+        <div id="ecam-image-preview"></div>
       </div>
     </div>
     <div class="form-footer">
@@ -502,6 +540,68 @@
         </button>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- NEW RECOMMENDATION -->
+<div class="modal-overlay" id="modal-rec" onclick="closeModalOut(event,'modal-rec')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">New Recommendation</div>
+    <div class="form-body">
+      <div class="form-row">
+        <div class="form-field"><label>Company</label><input type="text" id="nrec-company" placeholder="e.g. Boucheron"></div>
+        <div class="form-field"><label>Category</label><input type="text" id="nrec-category" placeholder="e.g. Fine Jewellery"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>Contact Name</label><input type="text" id="nrec-contact" placeholder="e.g. Sophie Laurent"></div>
+        <div class="form-field"><label>Position</label><input type="text" id="nrec-position" placeholder="e.g. VIP Director"></div>
+      </div>
+      <div class="form-field"><label>Country</label><input type="text" id="nrec-country" placeholder="e.g. France"></div>
+      <div class="form-field"><label>Notes</label><textarea id="nrec-notes" placeholder="Key details, perks, special access…"></textarea></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveRec()">Add Recommendation</button>
+      <div class="form-cancel" onclick="closeModal('modal-rec')">Cancel</div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT RECOMMENDATION -->
+<div class="modal-overlay" id="modal-edit-rec" onclick="closeModalOut(event,'modal-edit-rec')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Edit Recommendation</div>
+    <div class="form-body">
+      <div class="form-row">
+        <div class="form-field"><label>Company</label><input type="text" id="erec-company"></div>
+        <div class="form-field"><label>Category</label><input type="text" id="erec-category"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>Contact Name</label><input type="text" id="erec-contact"></div>
+        <div class="form-field"><label>Position</label><input type="text" id="erec-position"></div>
+      </div>
+      <div class="form-field"><label>Country</label><input type="text" id="erec-country"></div>
+      <div class="form-field"><label>Notes</label><textarea id="erec-notes"></textarea></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveEditRec()">Save Changes</button>
+      <div class="form-cancel" onclick="closeModal('modal-edit-rec')">Cancel</div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CLIENT TO CAMPAIGN -->
+<div class="modal-overlay" id="modal-add-cam-client" onclick="closeModalOut(event,'modal-add-cam-client')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add Client</div>
+    <div class="form-body" style="gap:0">
+      <div id="add-cam-client-list" style="display:flex;flex-direction:column;gap:0;max-height:60vh;overflow-y:auto"></div>
+    </div>
+    <div class="form-footer">
+      <div class="form-cancel" onclick="closeModal('modal-add-cam-client')">Done</div>
     </div>
   </div>
 </div>

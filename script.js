@@ -16,16 +16,35 @@ const TIERS = {
 };
 const TC = {Top:'#8a6d3e', Active:'#2a5fa8', Warm:'#b87020', Sleeper:'#8a93a2'};
 const SC = {Confirmed:'p-grn', Negotiation:'p-gold', Tentative:'p-amb', Waiting:'p-gh'};
-const CC = {Seasonal:'p-amb', Mandate:'p-gold', Event:'p-blu', Ongoing:'p-grn', Triggered:'p-gh'};
+const CC = {'Follow-Up':'p-blu', Seasonal:'p-amb', Mandate:'p-gold', Event:'p-blu', Ongoing:'p-grn', Triggered:'p-gh'};
+
+// ── RELATIONSHIP CADENCES ─────────────────────────────────────────
+const DEFAULT_REL_CADENCES = {
+  Personal: {waD:14, cD:30,  label:'Personal', p:1},
+  Close:    {waD:28, cD:null,label:'Close',    p:2},
+  General:  {waD:28, cD:null,label:'General',  p:3},
+  Proxy:    {waD:56, cD:null,label:'Proxy',    p:4},
+  Archive:  {waD:84, cD:null,label:'Archive',  p:5},
+};
+let REL_CADENCES = {};
+function loadRelCadences(){
+  try{ const saved=JSON.parse(localStorage.getItem('rel_cadences')||'null'); REL_CADENCES=saved||{}; }
+  catch(e){ REL_CADENCES={}; }
+  Object.keys(DEFAULT_REL_CADENCES).forEach(k=>{ if(!REL_CADENCES[k]) REL_CADENCES[k]={...DEFAULT_REL_CADENCES[k]}; });
+}
+function saveRelCadences(){ localStorage.setItem('rel_cadences',JSON.stringify(REL_CADENCES)); }
 
 // ── STATE ─────────────────────────────────────────────────────────
 let CLIENTS=[], PARTNERS=[], DEALS=[], CAMPAIGNS=[], RECS=[];
 let doneTasks = new Set(); // task_key set from DB
-let tF='All', cF='All', curTab='home';
+let tF='All', cF='All', relF='All', curTab='home';
 let selSegVal='All', editSegVal='All';
 let editClientId=null, editPartnerId=null, editCampaignId=null;
 let editingDealId=null;
+let editRecId=null;
 let homeTab='deals', homeDealTasks=null;
+let addingCampaignId=null;
+let ncam_imageData=null, ecam_imageData=null;
 
 // ── HELPERS ───────────────────────────────────────────────────────
 const ini = n => n.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
@@ -95,6 +114,8 @@ function normaliseCampaign(r){
     id: r.id, name: r.name, type: r.type||'Ongoing', seg: r.segment||'All',
     occ: r.occasion||'', date: r.date||'TBC', notes: r.notes||'',
     template: r.template||null,
+    waImage: r.wa_image||null,
+    manualClientIds: r.manual_client_ids||[],
   };
 }
 
@@ -121,6 +142,11 @@ function getCampaignClients(cam){
     });
   }
   if(cam.seg && cam.seg!=='All') filtered = filtered.filter(c=>clientMatchesSeg(c,cam.seg));
+  // Add manual clients (deduplicated)
+  if(cam.manualClientIds && cam.manualClientIds.length){
+    const existing=new Set(filtered.map(c=>c.id));
+    CLIENTS.filter(c=>cam.manualClientIds.includes(c.id)&&!existing.has(c.id)).forEach(c=>filtered.push(c));
+  }
   return filtered;
 }
 
@@ -136,9 +162,10 @@ function mkTasks(){
   activeCams.forEach(cam=>{ getCampaignClients(cam).forEach(c=>{ if(!camCovered.has(c.id)) camCovered.set(c.id,cam); }); });
 
   CLIENTS.forEach(c=>{
-    const tr=TIERS[c.tier]; if(!tr||c.tier==='Archive') return;
+    const rel=REL_CADENCES[c.relationship];
+    if(!rel||c.relationship==='Archive'||!c.relationship) return;
     const wa=daysSince(c.wa), cl=daysSince(c.call);
-    const waDue=tr.waD&&wa>=tr.waD, clDue=tr.cD&&cl>=tr.cD;
+    const waDue=rel.waD&&wa>=rel.waD, clDue=rel.cD&&cl>=rel.cD;
     if(!waDue&&!clDue) return;
 
     if(camCovered.has(c.id)){
@@ -150,21 +177,21 @@ function mkTasks(){
       }
       t.push({id:'cam-'+cam.id+'-'+c.id, nm:c.name, act:cam.name+' — '+c.name,
         why:camWhy,
-        urg:'soon', pri:(tr.p*10)+2, isCam:true, camId:cam.id, clientObj:c});
+        urg:'soon', pri:(rel.p*10)+2, isCam:true, camId:cam.id, clientObj:c});
       return;
     }
     if(clDue){
-      const ov=cl-tr.cD;
+      const ov=cl-rel.cD;
       t.push({id:'cl-'+c.id, nm:c.name, act:'Call '+c.name,
-        why:cl===9999?'Never called · '+c.tier+' client':`${cl}d since last call · due every ${tr.cD}d`,
-        urg:ov>14?'urgent':ov>=0?'soon':'normal', pri:tr.p*10+1+(c.deal?0:5)});
+        why:cl===9999?'Never called · '+c.relationship+' relationship':`${cl}d since last call · due every ${rel.cD}d`,
+        urg:ov>14?'urgent':ov>=0?'soon':'normal', pri:rel.p*10+1+(c.deal?0:5)});
       return;
     }
     if(waDue){
-      const ov=wa-tr.waD;
+      const ov=wa-rel.waD;
       t.push({id:'wa-'+c.id, nm:c.name, act:'WhatsApp '+c.name,
-        why:wa===9999?'Never contacted · '+c.tier+' client':`${wa}d since last message · due every ${tr.waD}d`,
-        urg:ov>7?'urgent':ov>=0?'soon':'normal', pri:tr.p*10+(c.deal?0:5)});
+        why:wa===9999?'Never contacted · '+c.relationship+' relationship':`${wa}d since last message · due every ${rel.waD}d`,
+        urg:ov>7?'urgent':ov>=0?'soon':'normal', pri:rel.p*10+(c.deal?0:5)});
     }
   });
 
@@ -212,24 +239,21 @@ function rHome(){
   if(homeTab==='deals'){ renderHomeDealTasks(); return; }
 
   // ── Bucket tasks into display groups ────────────────────────────
-  const holidayRx=/easter|birthday|christmas|eid|diwali|wish|ramadan|hanukkah|new year/i;
-  const mandateRx=/mandate|real estate|property|offerin/i;
-  const luxuryRx =/dior|luxury|tea|event|private|dinner|gala|experience|jewel|art|auction|aviation/i;
   const BUCKETS=[
-    {key:'holiday',  label:'Holiday & Wishes', tasks:[]},
-    {key:'mandates', label:'Mandates',          tasks:[]},
-    {key:'luxury',   label:'Luxury',            tasks:[]},
-    {key:'followups',label:'Follow-Ups',        tasks:[]},
+    {key:'followups',  label:'Follow-Ups',          tasks:[]},
+    {key:'mandates',   label:'Mandates',             tasks:[]},
+    {key:'luxury',     label:'Luxury',               tasks:[]},
+    {key:'holiday',    label:'Holidays & Birthdays', tasks:[]},
   ];
   tasks.forEach(t=>{
     const cam=t.camId?CAMPAIGNS.find(c=>c.id===t.camId):null;
     let b;
     if(cam){
-      if(cam.type==='Seasonal'||holidayRx.test(cam.name))      b=BUCKETS[0];
-      else if(cam.type==='Mandate'||mandateRx.test(cam.name))  b=BUCKETS[1];
-      else if(cam.type==='Event'  ||luxuryRx.test(cam.name))   b=BUCKETS[2];
-      else                                                       b=BUCKETS[3];
-    } else { b=BUCKETS[3]; }
+      if(cam.type==='Mandate')                          b=BUCKETS[1];
+      else if(cam.type==='Seasonal'||cam.type==='Triggered') b=BUCKETS[3];
+      else if(cam.type==='Follow-Up')                   b=BUCKETS[0];
+      else                                               b=BUCKETS[2];
+    } else { b=BUCKETS[0]; }
     b.tasks.push(t);
   });
 
@@ -439,22 +463,47 @@ function rDeals(){
 // ── CAMPAIGNS ─────────────────────────────────────────────────────
 function rCampaigns(){
   const list=document.getElementById('cam-list'); list.innerHTML='';
-  CAMPAIGNS.forEach((cam,i)=>{
-    const cnt=getCampaignClients(cam).length;
-    const el=document.createElement('div');
-    el.className='camc gc a'; el.style.animationDelay=(i*0.05)+'s';
-    el.onclick=()=>openCampaign(cam);
-    el.innerHTML=`<div class="camc-top">
-      <div class="camc-name">${cam.name}</div>
-      <span class="pill ${CC[cam.type]||'p-gh'}">${cam.type}</span>
-    </div>
-    <div class="camc-body">${cam.notes||''}</div>
-    <div class="camc-foot">
-      ${cam.date?`<span class="pill p-gh">${cam.date}</span>`:''}
-      ${cam.seg?`<span class="pill p-gold">Seg: ${cam.seg}</span>`:''}
-      <span class="pill p-grn">${cnt} clients</span>
-    </div>`;
-    list.appendChild(el);
+
+  const GROUPS=[
+    {key:'followups', label:'Follow-Ups',          cams:[]},
+    {key:'mandates',  label:'Mandates',             cams:[]},
+    {key:'luxury',    label:'Luxury',               cams:[]},
+    {key:'holiday',   label:'Holidays & Birthdays', cams:[]},
+  ];
+
+  CAMPAIGNS.forEach(cam=>{
+    let g;
+    if(cam.type==='Follow-Up')                          g=GROUPS[0];
+    else if(cam.type==='Mandate')                        g=GROUPS[1];
+    else if(cam.type==='Seasonal'||cam.type==='Triggered') g=GROUPS[3];
+    else if(cam.type==='Event'||cam.type==='Ongoing')    g=GROUPS[2];
+    else                                                  g=GROUPS[2];
+    g.cams.push(cam);
+  });
+
+  let gi=0;
+  GROUPS.forEach(group=>{
+    if(!group.cams.length) return;
+    const hdr=document.createElement('div');
+    hdr.className='cam-group-hdr'; hdr.textContent=group.label;
+    list.appendChild(hdr);
+    group.cams.forEach(cam=>{
+      const cnt=getCampaignClients(cam).length;
+      const el=document.createElement('div');
+      el.className='camc gc a'; el.style.animationDelay=(gi++*0.05)+'s';
+      el.onclick=()=>openCampaign(cam);
+      el.innerHTML=`<div class="camc-top">
+        <div class="camc-name">${cam.name}</div>
+        <span class="pill ${CC[cam.type]||'p-gh'}">${cam.type}</span>
+      </div>
+      <div class="camc-body">${cam.notes||''}</div>
+      <div class="camc-foot">
+        ${cam.date?`<span class="pill p-gh">${cam.date}</span>`:''}
+        ${cam.seg?`<span class="pill p-gold">Seg: ${cam.seg}</span>`:''}
+        <span class="pill p-grn">${cnt} clients</span>
+      </div>`;
+      list.appendChild(el);
+    });
   });
 }
 
@@ -490,21 +539,69 @@ function openCampaign(cam){
       </div>
     </div>
     ${cam.notes?`<div class="prof-sec"><div class="sec-lbl">Campaign Brief</div><div class="sec-notes">${cam.notes}</div></div>`:''}
-    <div class="prof-sec"><div class="sec-lbl">Enrolled Clients · ${clients.length}</div>${rosterHtml}</div>
+    <div class="prof-sec">
+      <div class="sec-lbl" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Enrolled Clients · ${clients.length}</span>
+        <span style="font-size:11px;color:var(--gold);font-weight:600;cursor:pointer" onclick="openAddCamClient('${cam.id}')">+ Add Client</span>
+      </div>
+      ${rosterHtml}
+    </div>
     <div style="height:36px"></div>`;
   pushProf('ps-campaign');
 }
 
+// ── ADD CLIENT TO CAMPAIGN ────────────────────────────────────────
+function openAddCamClient(camId){
+  addingCampaignId=camId;
+  const cam=CAMPAIGNS.find(c=>c.id===camId);
+  const existing=getCampaignClients(cam).map(c=>c.id);
+  const list=document.getElementById('add-cam-client-list');
+  list.innerHTML=CLIENTS.map(c=>`<div class="cam-roster-item a" onclick="toggleCamClient('${c.id}','${camId}',this)">
+    <div class="cri-av">${ini(c.name)}</div>
+    <div style="flex:1"><div class="cri-name">${c.name}</div><div class="cri-sub">${c.role||c.city||''} · ${c.tier}</div></div>
+    ${existing.includes(c.id)?'<span class="pill p-grn" style="font-size:9px">Enrolled</span>':'<span class="pill p-gh" style="font-size:9px">Add</span>'}
+  </div>`).join('');
+  openModal('modal-add-cam-client');
+}
+
+async function toggleCamClient(clientId,camId,el){
+  const cam=CAMPAIGNS.find(c=>c.id===camId); if(!cam) return;
+  const ids=[...(cam.manualClientIds||[])];
+  const idx=ids.indexOf(clientId);
+  if(idx>-1) ids.splice(idx,1);
+  else ids.push(clientId);
+  const {error}=await SB.from('campaigns').update({manual_client_ids:ids}).eq('id',camId);
+  if(error){ showToast('Error updating'); return; }
+  cam.manualClientIds=ids;
+  closeModal('modal-add-cam-client');
+  openCampaign(cam);
+  showToast(idx>-1?'Client removed':'Client added ✓');
+}
+
 // ── CLIENTS ───────────────────────────────────────────────────────
 function rClients(){
+  const total=CLIENTS.length;
+  const billionaires=CLIENTS.filter(c=>c.nw==='Billionaire').length;
+  const centimillionaires=CLIENTS.filter(c=>c.nw==='Centimillionaire').length;
+  const activeRels=CLIENTS.filter(c=>c.relationship&&c.relationship!=='Archive').length;
+  const statsEl=document.getElementById('cli-stats');
+  if(statsEl) statsEl.innerHTML=`
+    <div class="cli-stat"><div class="cli-stat-n">${total}</div><div class="cli-stat-l">Total</div></div>
+    <div class="cli-stat"><div class="cli-stat-n g">${billionaires}</div><div class="cli-stat-l">Billionaire</div></div>
+    <div class="cli-stat"><div class="cli-stat-n">${centimillionaires}</div><div class="cli-stat-l">Centimilli.</div></div>
+    <div class="cli-stat"><div class="cli-stat-n">${activeRels}</div><div class="cli-stat-l">Active</div></div>
+  `;
+
   const q=(document.getElementById('cli-q')||{}).value||'';
   let list=CLIENTS;
   if(tF!=='All') list=list.filter(c=>c.tier===tF);
+  if(relF!=='All') list=list.filter(c=>c.relationship===relF);
   if(q) list=list.filter(c=>c.name.toLowerCase().includes(q.toLowerCase())||(c.role||'').toLowerCase().includes(q.toLowerCase()));
   const el=document.getElementById('cli-list'); el.innerHTML='';
   list.forEach((c,i)=>{
-    const tr=TIERS[c.tier], wa=daysSince(c.wa), cl=daysSince(c.call);
-    const clOv=tr?.cD&&cl>=tr.cD, waOv=tr?.waD&&wa>=tr.waD;
+    const rel=REL_CADENCES[c.relationship];
+    const wa=daysSince(c.wa), cl=daysSince(c.call);
+    const clOv=rel?.cD&&cl>=rel.cD, waOv=rel?.waD&&wa>=rel.waD;
     const div=document.createElement('div');
     div.className='pc gc a'; div.style.animationDelay=(i*0.04)+'s';
     div.onclick=()=>openC(c);
@@ -518,9 +615,16 @@ function rClients(){
   });
 }
 
+function setRelF(el,val){
+  relF=val;
+  document.querySelectorAll('#r-chips .chip').forEach(c=>c.classList.toggle('on',c===el));
+  rClients();
+}
+
 function openC(c){
-  const tr=TIERS[c.tier], wa=daysSince(c.wa), cl=daysSince(c.call);
-  const waOv=tr?.waD&&wa>=tr.waD, clOv=tr?.cD&&cl>=tr.cD;
+  const rel=REL_CADENCES[c.relationship];
+  const wa=daysSince(c.wa), cl=daysSince(c.call);
+  const waOv=rel?.waD&&wa>=rel.waD, clOv=rel?.cD&&cl>=rel.cD;
   const waStr=wa===9999?'Never contacted':`${wa} days ago`;
   const clStr=cl===9999?'Never called':`${cl} days ago`;
   const cDeals=DEALS.filter(d=>d.clientId===c.id);
@@ -555,10 +659,9 @@ function openC(c){
     </div>
     <div class="prof-sec">
       <div class="sec-lbl">Contact Status</div>
+      ${c.relationship?`<div class="sec-row"><div class="sec-k">Relationship</div><div class="sec-v">${c.relationship}</div></div>`:''}
       <div class="sec-row"><div class="sec-k">Last WhatsApp</div><div class="sec-v ${waOv?'ov':wa!==9999?'ok':''}">${waStr}${waOv?' — Overdue':''}</div></div>
       <div class="sec-row"><div class="sec-k">Last Phone Call</div><div class="sec-v ${clOv?'ov':cl!==9999?'ok':''}">${clStr}${clOv?' — Overdue':''}</div></div>
-      <div class="sec-row"><div class="sec-k">WA cadence</div><div class="sec-v">${tr?.waD?`Every ${tr.waD} days`:'N/A'}</div></div>
-      <div class="sec-row"><div class="sec-k">Call cadence</div><div class="sec-v">${tr?.cD?`Every ${tr.cD} days`:'N/A'}</div></div>
       ${c.followUp?`<div class="sec-row"><div class="sec-k">Follow-up date</div><div class="sec-v">${c.followUp}</div></div>`:''}
     </div>
     ${c.int.length?`<div class="prof-sec"><div class="sec-lbl">Interests & Segments</div><div class="itags">${c.int.map(x=>`<span class="pill p-gh">${x}</span>`).join('')}</div></div>`:''}
@@ -672,14 +775,64 @@ function rRecs(){
     }
     const el=document.createElement('div');
     el.className='rec-item a';
+    el.onclick=()=>openEditRec(r.id);
     el.innerHTML=`<div class="rec-av">${(r.company||'?')[0]}</div>
       <div style="flex:1;min-width:0">
         <div class="rec-co">${r.company}</div>
         ${r.contact||r.position?`<div class="rec-ct">${[r.contact,r.position].filter(Boolean).join(' · ')}</div>`:''}
+        ${r.notes?`<div class="rec-notes">${r.notes}</div>`:''}
       </div>
       ${r.country?`<div class="rec-ctry">${r.country}</div>`:''}`;
     list.appendChild(el);
   });
+}
+
+async function saveRec(){
+  const company=document.getElementById('nrec-company').value.trim();
+  if(!company){ alert('Please enter a company name.'); return; }
+  const row={
+    company, category:document.getElementById('nrec-category').value.trim()||'Other',
+    contact:document.getElementById('nrec-contact').value.trim(),
+    position:document.getElementById('nrec-position').value.trim(),
+    country:document.getElementById('nrec-country').value.trim(),
+    notes:document.getElementById('nrec-notes').value.trim(),
+    sort_order:RECS.length
+  };
+  const {data,error}=await SB.from('recommendations').insert(row).select().single();
+  if(error){ alert('Error: '+error.message); return; }
+  RECS.push(data); RECS.sort((a,b)=>(a.category||'').localeCompare(b.category||''));
+  closeModal('modal-rec');
+  ['nrec-company','nrec-category','nrec-contact','nrec-position','nrec-country','nrec-notes'].forEach(id=>document.getElementById(id).value='');
+  rRecs(); showToast('Recommendation added ✓');
+}
+
+function openEditRec(id){
+  const r=RECS.find(x=>x.id===id); if(!r) return;
+  editRecId=id;
+  document.getElementById('erec-company').value=r.company||'';
+  document.getElementById('erec-category').value=r.category||'';
+  document.getElementById('erec-contact').value=r.contact||'';
+  document.getElementById('erec-position').value=r.position||'';
+  document.getElementById('erec-country').value=r.country||'';
+  document.getElementById('erec-notes').value=r.notes||'';
+  openModal('modal-edit-rec');
+}
+
+async function saveEditRec(){
+  const r=RECS.find(x=>x.id===editRecId); if(!r) return;
+  const updates={
+    company:document.getElementById('erec-company').value.trim()||r.company,
+    category:document.getElementById('erec-category').value.trim()||r.category,
+    contact:document.getElementById('erec-contact').value.trim(),
+    position:document.getElementById('erec-position').value.trim(),
+    country:document.getElementById('erec-country').value.trim(),
+    notes:document.getElementById('erec-notes').value.trim(),
+  };
+  const {error}=await SB.from('recommendations').update(updates).eq('id',editRecId);
+  if(error){ alert('Error: '+error.message); return; }
+  Object.assign(r,updates);
+  closeModal('modal-edit-rec');
+  rRecs(); showToast('Updated ✓');
 }
 
 // ── FILTER & NAV ─────────────────────────────────────────────────
@@ -688,9 +841,19 @@ function setF(el,type,val){
   else{cF=val;document.querySelectorAll('#c-chips .chip').forEach(c=>c.classList.toggle('on',c===el));rPartners();}
 }
 
-const TABS=['home','deals','campaigns','clients','partners','recs'];
+const TABS=['home','deals','campaigns','clients','partners','recs','settings'];
 function go(tab){
   if(tab===curTab) return;
+  // Close any open profiles
+  ['ps-client','ps-partner','ps-campaign'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el && el.classList.contains('open')){
+      el.classList.remove('open');
+      setTimeout(()=>{ if(!el.classList.contains('open')) el.style.display='none'; },380);
+    }
+  });
+  document.querySelector('.screen.pushed')?.classList.remove('pushed');
+
   curTab=tab;
   TABS.forEach(t=>{
     document.getElementById('s-'+t).classList.toggle('hidden',t!==tab);
@@ -703,7 +866,43 @@ function go(tab){
   else if(tab==='clients') rClients();
   else if(tab==='partners') rPartners();
   else if(tab==='recs') rRecs();
+  else if(tab==='settings') rSettings();
   document.getElementById('s-'+tab).scrollTop=0;
+}
+
+// ── SETTINGS ─────────────────────────────────────────────────────
+function rSettings(){
+  const el=document.getElementById('settings-cadences'); if(!el) return;
+  el.innerHTML=Object.entries(REL_CADENCES).map(([key,r])=>`
+    <div class="settings-rel-row">
+      <div class="settings-rel-label">${key}</div>
+      <div class="settings-rel-inputs">
+        <div class="settings-rel-field">
+          <label>WhatsApp (days)</label>
+          <input type="number" class="settings-input" id="set-${key}-wa" value="${r.waD||''}" min="1" placeholder="days">
+        </div>
+        <div class="settings-rel-field">
+          <label>Call (days)</label>
+          <input type="number" class="settings-input" id="set-${key}-call" value="${r.cD||''}" min="1" placeholder="none">
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function saveSettings(){
+  Object.keys(REL_CADENCES).forEach(key=>{
+    const waEl=document.getElementById('set-'+key+'-wa');
+    const callEl=document.getElementById('set-'+key+'-call');
+    if(waEl) REL_CADENCES[key].waD=waEl.value?parseInt(waEl.value):null;
+    if(callEl) REL_CADENCES[key].cD=callEl.value?parseInt(callEl.value):null;
+  });
+  saveRelCadences(); showToast('Settings saved ✓'); rHome();
+}
+
+function resetSettings(){
+  REL_CADENCES={...DEFAULT_REL_CADENCES};
+  Object.keys(REL_CADENCES).forEach(k=>REL_CADENCES[k]={...DEFAULT_REL_CADENCES[k]});
+  saveRelCadences(); rSettings(); showToast('Reset to defaults ✓');
 }
 
 // ── PROFILE NAV ───────────────────────────────────────────────────
@@ -763,7 +962,7 @@ function openEditClient(id){
   document.getElementById('ec-nw').value=c.nw;
   document.getElementById('ec-nat').value=c.nat||'';
   document.getElementById('ec-rel').value=c.rel||'Unknown';
-  document.getElementById('ec-rel2').value=c.relationship||'Meeting';
+  document.getElementById('ec-rel2').value=c.relationship||'General';
   document.getElementById('ec-int').value=(c.int||[]).join(', ');
   document.getElementById('ec-notes').value=c.notes||'';
   openModal('modal-edit-client');
@@ -850,6 +1049,19 @@ async function saveEditPartner(){
   showToast('Partner updated ✓');
 }
 
+// ── CAMPAIGN IMAGE UPLOAD ─────────────────────────────────────────
+function previewCamImage(prefix){
+  const file=document.getElementById(prefix+'-image').files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const preview=document.getElementById(prefix+'-image-preview');
+    preview.innerHTML=`<img src="${e.target.result}" style="width:100%;max-height:140px;object-fit:cover;border-radius:10px;margin-top:8px">`;
+    if(prefix==='ncam') ncam_imageData={name:file.name,dataUrl:e.target.result};
+    else ecam_imageData={name:file.name,dataUrl:e.target.result};
+  };
+  reader.readAsDataURL(file);
+}
+
 // ── SAVE CAMPAIGN ─────────────────────────────────────────────────
 async function saveCampaign(){
   const name=document.getElementById('ncam-name').value.trim();
@@ -860,25 +1072,39 @@ async function saveCampaign(){
     date:document.getElementById('ncam-date').value.trim()||'TBC',
     notes:document.getElementById('ncam-notes').value.trim(),
     template:document.getElementById('ncam-template').value.trim()||null,
+    wa_image: ncam_imageData?JSON.stringify(ncam_imageData):null,
     sort_order:CAMPAIGNS.length
   };
   const {data,error}=await SB.from('campaigns').insert(row).select().single();
   if(error){ alert('Error: '+error.message); return; }
   CAMPAIGNS.push(normaliseCampaign(data));
+  ncam_imageData=null;
   closeModal('modal-campaign');
   ['ncam-name','ncam-occ','ncam-date','ncam-notes','ncam-template'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('ncam-image-preview').innerHTML='';
   rCampaigns(); updateHomeStats(); showToast('Campaign added ✓');
 }
 
 function openEditCampaign(id){
   const cam=CAMPAIGNS.find(x=>x.id===id); if(!cam) return;
   editCampaignId=id; editSegVal=cam.seg||'All';
+  ecam_imageData=null;
   document.getElementById('ecam-name').value=cam.name;
   document.getElementById('ecam-type').value=cam.type;
   document.getElementById('ecam-date').value=cam.date;
   document.getElementById('ecam-occ').value=cam.occ||'';
   document.getElementById('ecam-notes').value=cam.notes||'';
   document.getElementById('ecam-template').value=cam.template||'';
+  // Show existing image preview
+  const previewEl=document.getElementById('ecam-image-preview');
+  if(cam.waImage){
+    try{
+      const img=typeof cam.waImage==='string'?JSON.parse(cam.waImage):cam.waImage;
+      previewEl.innerHTML=`<div style="font-size:11px;color:var(--t3);margin-top:6px">Current image: ${img.name||'attached'}</div>`;
+    }catch(e){ previewEl.innerHTML=''; }
+  } else {
+    previewEl.innerHTML='';
+  }
   document.querySelectorAll('#edit-seg-chips .seg-chip').forEach(chip=>{
     const onclick=chip.getAttribute('onclick')||'';
     const m=onclick.match(/'([^']+)'\)/);
@@ -898,9 +1124,11 @@ async function saveEditCampaign(){
     notes:document.getElementById('ecam-notes').value.trim(),
     template:document.getElementById('ecam-template').value.trim()||null,
   };
+  if(ecam_imageData) updates.wa_image=JSON.stringify(ecam_imageData);
   const {error}=await SB.from('campaigns').update(updates).eq('id',editCampaignId);
   if(error){ alert('Error: '+error.message); return; }
-  Object.assign(cam, normaliseCampaign({...updates, id:editCampaignId}));
+  ecam_imageData=null;
+  Object.assign(cam, normaliseCampaign({...updates, id:editCampaignId, wa_image:updates.wa_image||cam.waImage, manual_client_ids:cam.manualClientIds}));
   closeModal('modal-edit-campaign');
   openCampaign(cam); if(curTab==='campaigns') rCampaigns();
   showToast('Campaign updated ✓');
@@ -1103,20 +1331,21 @@ function personaliseTemplate(tpl, client){
 
 function renderAttach(campaign){
   const section=document.getElementById('wa-attach-section');
-  if(!campaign||!campaign.attachment){ section.innerHTML=''; return; }
-  const name=campaign.attachment.name||'';
-  const isImg=/\.(png|jpg|jpeg|gif|webp)$/i.test(name);
-  if(!isImg){ section.innerHTML=''; return; }
+  if(!campaign||!campaign.waImage){ section.innerHTML=''; return; }
+  let img; try{ img=typeof campaign.waImage==='string'?JSON.parse(campaign.waImage):campaign.waImage; }catch(e){ section.innerHTML=''; return; }
+  if(!img||!img.dataUrl){ section.innerHTML=''; return; }
   section.innerHTML=`<div class="wa-attached-file">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-    <div class="wa-attached-name">${name}</div>
+    <div class="wa-attached-name">${img.name||'Campaign image'}</div>
     <span class="wa-attached-copy" onclick="copyAttachment()">Copy Image</span>
   </div>`;
+  waCurrentCampaign._imgParsed=img;
 }
 
 function copyAttachment(){
   const btn=document.querySelector('.wa-attached-copy');
-  const dataUrl=waCurrentCampaign?.attachment?.dataUrl;
+  const img=waCurrentCampaign?._imgParsed||null;
+  const dataUrl=img?.dataUrl;
   if(dataUrl){
     fetch(dataUrl).then(r=>r.blob()).then(blob=>{
       try{ navigator.clipboard.write([new ClipboardItem({[blob.type]:blob})]).then(()=>{ btn.textContent='✓ Copied!'; setTimeout(()=>btn.textContent='Copy Image',2000); }); }
@@ -1159,6 +1388,8 @@ function updateHomeStats(){
 
 // ── INIT ──────────────────────────────────────────────────────────
 (async function init(){
+  loadRelCadences();
+
   // Set date
   const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
