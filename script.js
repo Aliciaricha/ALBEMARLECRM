@@ -51,6 +51,8 @@ let ncam_imageData=null, ecam_imageData=null;
 let camCompletions = new Set(); // 'type:id' keys
 let openCampaignId = null;
 let addCamTab='clients';
+let CLIENT_ACTIVITIES=[];
+let currentActivityClientId=null;
 
 // ── HELPERS ───────────────────────────────────────────────────────
 const ini = n => n.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
@@ -1027,7 +1029,154 @@ function filterByCity(val){
   if(curTab!=='clients') go('clients'); else rClients();
 }
 
-function openC(c){
+// ── ACTIVITY TIMELINE ─────────────────────────────────────────────
+async function loadClientActivities(clientId){
+  const {data,error}=await SB.from('client_activities').select('*').eq('client_id',clientId).order('occurred_at',{ascending:false});
+  if(error){ CLIENT_ACTIVITIES=[]; return; }
+  CLIENT_ACTIVITIES=data||[];
+}
+
+function fmtActivityDate(iso){
+  const d=new Date(iso);
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const hh=String(d.getHours()).padStart(2,'0');
+  const mm=String(d.getMinutes()).padStart(2,'0');
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()} · ${hh}:${mm}`;
+}
+
+function toLocalDatetimeStr(iso){
+  const d=new Date(iso);
+  const pad=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function activityIcon(type){
+  if(type==='whatsapp') return `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+  if(type==='call')     return `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.6a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 3h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 10.91a16 16 0 0 0 5.61 5.61l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
+  return `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
+}
+
+function activityLabel(type){
+  if(type==='whatsapp') return 'WhatsApp';
+  if(type==='call')     return 'Call';
+  return 'Meeting';
+}
+
+function renderActivityTimeline(clientId){
+  const acts=CLIENT_ACTIVITIES.filter(a=>a.client_id===clientId);
+  if(!acts.length) return `<div class="atl-empty">No activity logged yet.</div>`;
+  return `<div class="atl-wrap">${acts.map(a=>`
+    <div class="atl-entry" id="atl-${a.id}">
+      <div class="atl-rail">
+        <div class="atl-dot ${a.type==='whatsapp'?'wa':a.type==='call'?'call':'meet'}">${activityIcon(a.type)}</div>
+        <div class="atl-tail"></div>
+      </div>
+      <div class="atl-body">
+        <div class="atl-type">${activityLabel(a.type)}</div>
+        <div class="atl-date">${fmtActivityDate(a.occurred_at)}</div>
+        ${a.notes?`<div class="atl-notes">${a.notes}</div>`:''}
+        <div class="atl-actions">
+          <span class="atl-edit-btn" onclick="startEditActivity('${a.id}')">Edit</span>
+        </div>
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function startEditActivity(id){
+  const a=CLIENT_ACTIVITIES.find(x=>x.id===id); if(!a) return;
+  const entry=document.getElementById('atl-'+id); if(!entry) return;
+  const body=entry.querySelector('.atl-body');
+  body.innerHTML=`
+    <div class="atl-edit-form">
+      <input class="atl-edit-input" type="datetime-local" id="atl-dt-${id}" value="${toLocalDatetimeStr(a.occurred_at)}">
+      <input class="atl-edit-input" type="text" id="atl-notes-${id}" placeholder="Notes (optional)" value="${a.notes||''}">
+      <div class="atl-edit-btns">
+        <button class="atl-save-btn" onclick="saveActivityEdit('${id}')">Save</button>
+        <span class="atl-cancel-btn" onclick="cancelEditActivity('${id}')">Cancel</span>
+        <span class="atl-delete-btn" onclick="deleteActivity('${id}')">Delete</span>
+      </div>
+    </div>`;
+}
+
+function cancelEditActivity(id){
+  const a=CLIENT_ACTIVITIES.find(x=>x.id===id); if(!a) return;
+  const entry=document.getElementById('atl-'+id); if(!entry) return;
+  const body=entry.querySelector('.atl-body');
+  body.innerHTML=`
+    <div class="atl-type">${activityLabel(a.type)}</div>
+    <div class="atl-date">${fmtActivityDate(a.occurred_at)}</div>
+    ${a.notes?`<div class="atl-notes">${a.notes}</div>`:''}
+    <div class="atl-actions">
+      <span class="atl-edit-btn" onclick="startEditActivity('${a.id}')">Edit</span>
+    </div>`;
+}
+
+async function saveActivityEdit(id){
+  const a=CLIENT_ACTIVITIES.find(x=>x.id===id); if(!a) return;
+  const dtVal=document.getElementById('atl-dt-'+id)?.value;
+  const notesVal=document.getElementById('atl-notes-'+id)?.value.trim()||null;
+  if(!dtVal){ showToast('Please set a date/time'); return; }
+  const occurred_at=new Date(dtVal).toISOString();
+  const {error}=await SB.from('client_activities').update({occurred_at,notes:notesVal}).eq('id',id);
+  if(error){ showToast('Error saving'); return; }
+  a.occurred_at=occurred_at; a.notes=notesVal;
+  cancelEditActivity(id);
+  showToast('Activity updated ✓');
+}
+
+async function deleteActivity(id){
+  const {error}=await SB.from('client_activities').delete().eq('id',id);
+  if(error){ showToast('Error deleting'); return; }
+  CLIENT_ACTIVITIES=CLIENT_ACTIVITIES.filter(x=>x.id!==id);
+  const entry=document.getElementById('atl-'+id);
+  if(entry) entry.remove();
+  showToast('Deleted ✓');
+}
+
+async function openLogMeetingPrompt(clientId){
+  const now=new Date();
+  const pad=n=>String(n).padStart(2,'0');
+  const defVal=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  // Inject a mini form into the timeline section
+  const tlSec=document.getElementById('atl-meeting-prompt');
+  if(!tlSec) return;
+  tlSec.innerHTML=`
+    <div class="atl-edit-form" style="margin-top:0">
+      <input class="atl-edit-input" type="datetime-local" id="meet-dt" value="${defVal}">
+      <input class="atl-edit-input" type="text" id="meet-notes" placeholder="Notes (optional)">
+      <div class="atl-edit-btns">
+        <button class="atl-save-btn" onclick="saveLogMeeting('${clientId}')">Log Meeting</button>
+        <span class="atl-cancel-btn" onclick="cancelLogMeeting()">Cancel</span>
+      </div>
+    </div>`;
+}
+
+function cancelLogMeeting(){
+  const el=document.getElementById('atl-meeting-prompt');
+  if(el) el.innerHTML=`<div class="atl-log-meeting" onclick="openLogMeetingPrompt('${currentActivityClientId}')">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
+    <span class="atl-log-meeting-lbl">Log Meeting</span>
+  </div>`;
+}
+
+async function saveLogMeeting(clientId){
+  const dtVal=document.getElementById('meet-dt')?.value;
+  const notesVal=document.getElementById('meet-notes')?.value.trim()||null;
+  if(!dtVal){ showToast('Please set a date/time'); return; }
+  const occurred_at=new Date(dtVal).toISOString();
+  const {data,error}=await SB.from('client_activities').insert({client_id:clientId,type:'meeting',occurred_at,notes:notesVal}).select().single();
+  if(error){ showToast('Error: '+error.message); return; }
+  CLIENT_ACTIVITIES=[data,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at));
+  // Re-render timeline section
+  const tlWrap=document.getElementById('atl-inner');
+  if(tlWrap) tlWrap.innerHTML=renderActivityTimeline(clientId);
+  cancelLogMeeting();
+  showToast('Meeting logged ✓');
+}
+
+async function openC(c){
+  currentActivityClientId=c.id;
   const rel=REL_CADENCES[c.relationship];
   const wa=daysSince(c.wa), cl=daysSince(c.call);
   const waOv=rel?.waD&&wa>=rel.waD, clOv=rel?.cD&&cl>=rel.cD;
@@ -1041,6 +1190,14 @@ function openC(c){
 
   const cCams=CAMPAIGNS.filter(cam=>getCampaignClients(cam).some(cl2=>cl2.id===c.id));
   const camHtml=cCams.length?cCams.map(cam=>`<span class="pill p-cam" onclick="openCampaign(CAMPAIGNS.find(x=>x.id==='${cam.id}'))">${cam.name}</span>`).join(''):'';
+
+  // Load activities (async, then update)
+  await loadClientActivities(c.id);
+
+  const meetingPromptHtml=`<div class="atl-log-meeting" onclick="openLogMeetingPrompt('${c.id}')">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
+    <span class="atl-log-meeting-lbl">Log Meeting</span>
+  </div>`;
 
   document.getElementById('ps-client-body').innerHTML=`
     <div class="prof-back-row">
@@ -1075,6 +1232,11 @@ function openC(c){
     ${camHtml?`<div class="prof-sec"><div class="sec-lbl">Active Campaigns</div><div class="itags" style="margin-top:4px">${camHtml}</div></div>`:''}
     <div class="prof-sec"><div class="sec-lbl">Deals & Commission</div>${dHtml}</div>
     ${c.notes?`<div class="prof-sec"><div class="sec-lbl">Notes</div><div class="sec-notes">${c.notes}</div></div>`:''}
+    <div class="prof-sec">
+      <div class="sec-lbl">Activity Timeline</div>
+      <div id="atl-inner">${renderActivityTimeline(c.id)}</div>
+      <div id="atl-meeting-prompt" style="margin-top:10px">${meetingPromptHtml}</div>
+    </div>
     <div class="acts">
       <div class="act" onclick="openWaSheet(CLIENTS.find(x=>x.id==='${c.id}'),null)">
         <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
@@ -1100,15 +1262,31 @@ function openC(c){
 // ── LOG CALL / WA ─────────────────────────────────────────────────
 async function logCall(c){
   if(!c) return;
-  const today=new Date().toISOString().split('T')[0];
+  const now=new Date();
+  const today=now.toISOString().split('T')[0];
   const {error}=await SB.from('clients').update({last_call:today}).eq('id',c.id);
-  if(!error){ c.call=today; rHome(); if(curTab==='clients') rClients(); showToast('Call logged ✓'); }
+  if(error) return;
+  c.call=today;
+  // Insert activity entry
+  const {data:actData}=await SB.from('client_activities').insert({client_id:c.id,type:'call',occurred_at:now.toISOString()}).select().single();
+  if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
+  const tlInner=document.getElementById('atl-inner');
+  if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
+  rHome(); if(curTab==='clients') rClients(); showToast('Call logged ✓');
 }
 async function logWa(c){
   if(!c) return;
-  const today=new Date().toISOString().split('T')[0];
+  const now=new Date();
+  const today=now.toISOString().split('T')[0];
   const {error}=await SB.from('clients').update({last_wa:today}).eq('id',c.id);
-  if(!error){ c.wa=today; rHome(); if(curTab==='clients') rClients(); showToast('WhatsApp logged ✓'); }
+  if(error) return;
+  c.wa=today;
+  // Insert activity entry
+  const {data:actData}=await SB.from('client_activities').insert({client_id:c.id,type:'whatsapp',occurred_at:now.toISOString()}).select().single();
+  if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
+  const tlInner=document.getElementById('atl-inner');
+  if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
+  rHome(); if(curTab==='clients') rClients(); showToast('WhatsApp logged ✓');
 }
 
 // ── PARTNERS ──────────────────────────────────────────────────────
@@ -1797,14 +1975,6 @@ function copyWaMsg(){
 
 
 function closeWaSheet(e){ if(e.target===document.getElementById('wa-sheet-overlay')) document.getElementById('wa-sheet-overlay').classList.remove('open'); }
-
-function logCall(c){
-  if(!c) return;
-  const today=new Date().toISOString().split('T')[0];
-  SB.from('clients').update({last_call:today}).eq('id',c.id).then(({error})=>{
-    if(!error){ c.call=today; rHome(); if(curTab==='clients') rClients(); showToast('Call logged ✓'); }
-  });
-}
 
 // ── UTILS ─────────────────────────────────────────────────────────
 function updateHomeStats(){

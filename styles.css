@@ -296,6 +296,40 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .cam-group-hdr { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--t3); padding: 0 16px; margin: 20px 0 8px; }
 .cam-group-hdr:first-child { margin-top: 0; }
 
+/* ── ACTIVITY TIMELINE ─────────────────────────────────────────── */
+.atl-wrap { display: flex; flex-direction: column; padding-top: 4px; }
+.atl-entry { display: flex; gap: 12px; position: relative; padding-bottom: 16px; }
+.atl-entry:last-child { padding-bottom: 0; }
+.atl-rail { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 28px; }
+.atl-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.atl-dot svg { width: 13px; height: 13px; }
+.atl-dot.wa  { background: rgba(37,211,102,0.12); border: 0.5px solid rgba(37,211,102,0.30); }
+.atl-dot.wa svg  { stroke: #1aa55d; }
+.atl-dot.call{ background: rgba(42,95,168,0.10);  border: 0.5px solid rgba(42,95,168,0.25); }
+.atl-dot.call svg { stroke: var(--blue); }
+.atl-dot.meet{ background: rgba(138,109,62,0.10); border: 0.5px solid var(--gold-border); }
+.atl-dot.meet svg { stroke: var(--gold); }
+.atl-tail { flex: 1; width: 1.5px; background: rgba(0,0,0,0.07); margin-top: 4px; min-height: 10px; }
+.atl-entry:last-child .atl-tail { display: none; }
+.atl-body { flex: 1; min-width: 0; padding-top: 4px; }
+.atl-type { font-size: 12px; font-weight: 700; color: var(--t1); }
+.atl-date { font-size: 11px; color: var(--t3); margin-top: 2px; }
+.atl-notes { font-size: 11px; color: var(--t2); margin-top: 4px; line-height: 1.5; font-style: italic; }
+.atl-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.atl-edit-btn { font-size: 10px; font-weight: 600; color: var(--t3); cursor: pointer; padding: 3px 8px; border-radius: 8px; border: 0.5px solid rgba(0,0,0,0.08); background: rgba(255,255,255,0.60); transition: color 0.15s; }
+.atl-edit-btn:active { color: var(--gold); }
+.atl-edit-form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.atl-edit-input { width: 100%; padding: 8px 11px; border-radius: 10px; border: 0.5px solid rgba(0,0,0,0.10); background: rgba(255,255,255,0.85); font-family: 'Manrope'; font-size: 12px; color: var(--t1); outline: none; -webkit-appearance: none; }
+.atl-edit-input:focus { border-color: var(--gold); }
+.atl-edit-btns { display: flex; align-items: center; gap: 10px; }
+.atl-save-btn { padding: 6px 14px; border-radius: 9px; border: none; background: var(--gold); color: white; font-family: 'Manrope'; font-size: 11px; font-weight: 600; cursor: pointer; }
+.atl-cancel-btn { font-size: 11px; color: var(--t3); cursor: pointer; padding: 4px; }
+.atl-delete-btn { font-size: 11px; color: var(--red); cursor: pointer; padding: 4px; margin-left: auto; font-weight: 600; }
+.atl-empty { font-size: 12px; color: var(--t3); font-style: italic; padding: 4px 0 2px; }
+.atl-log-meeting { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; border: 1px dashed rgba(138,109,62,0.30); background: rgba(138,109,62,0.04); cursor: pointer; margin-top: 8px; }
+.atl-log-meeting svg { stroke: var(--gold); width: 13px; height: 13px; flex-shrink: 0; }
+.atl-log-meeting-lbl { font-size: 12px; font-weight: 600; color: var(--gold); }
+
 /* Recommendation notes */
 .rec-notes { font-size: 11px; color: var(--t3); margin-top: 3px; line-height: 1.5; }
 
