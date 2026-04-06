@@ -1267,8 +1267,8 @@ async function logCall(c){
   const {error}=await SB.from('clients').update({last_call:today}).eq('id',c.id);
   if(error) return;
   c.call=today;
-  // Insert activity entry
-  const {data:actData}=await SB.from('client_activities').insert({client_id:c.id,type:'call',occurred_at:now.toISOString()}).select().single();
+  const {data:actData,error:actErr}=await SB.from('client_activities').insert({client_id:c.id,type:'call',occurred_at:now.toISOString()}).select().single();
+  if(actErr){ console.error('client_activities insert error:',actErr); }
   if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
@@ -1281,8 +1281,8 @@ async function logWa(c){
   const {error}=await SB.from('clients').update({last_wa:today}).eq('id',c.id);
   if(error) return;
   c.wa=today;
-  // Insert activity entry
-  const {data:actData}=await SB.from('client_activities').insert({client_id:c.id,type:'whatsapp',occurred_at:now.toISOString()}).select().single();
+  const {data:actData,error:actErr}=await SB.from('client_activities').insert({client_id:c.id,type:'whatsapp',occurred_at:now.toISOString()}).select().single();
+  if(actErr){ console.error('client_activities insert error:',actErr); }
   if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
