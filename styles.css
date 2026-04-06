@@ -326,9 +326,6 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .atl-cancel-btn { font-size: 11px; color: var(--t3); cursor: pointer; padding: 4px; }
 .atl-delete-btn { font-size: 11px; color: var(--red); cursor: pointer; padding: 4px; margin-left: auto; font-weight: 600; }
 .atl-empty { font-size: 12px; color: var(--t3); font-style: italic; padding: 4px 0 2px; }
-.atl-log-meeting { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; border: 1px dashed rgba(138,109,62,0.30); background: rgba(138,109,62,0.04); cursor: pointer; margin-top: 8px; }
-.atl-log-meeting svg { stroke: var(--gold); width: 13px; height: 13px; flex-shrink: 0; }
-.atl-log-meeting-lbl { font-size: 12px; font-weight: 600; color: var(--gold); }
 
 /* Recommendation notes */
 .rec-notes { font-size: 11px; color: var(--t3); margin-top: 3px; line-height: 1.5; }

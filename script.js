@@ -1135,44 +1135,13 @@ async function deleteActivity(id){
 }
 
 async function openLogMeetingPrompt(clientId){
-  const now=new Date();
-  const pad=n=>String(n).padStart(2,'0');
-  const defVal=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  // Inject a mini form into the timeline section
-  const tlSec=document.getElementById('atl-meeting-prompt');
-  if(!tlSec) return;
-  tlSec.innerHTML=`
-    <div class="atl-edit-form" style="margin-top:0">
-      <input class="atl-edit-input" type="datetime-local" id="meet-dt" value="${defVal}">
-      <input class="atl-edit-input" type="text" id="meet-notes" placeholder="Notes (optional)">
-      <div class="atl-edit-btns">
-        <button class="atl-save-btn" onclick="saveLogMeeting('${clientId}')">Log Meeting</button>
-        <span class="atl-cancel-btn" onclick="cancelLogMeeting()">Cancel</span>
-      </div>
-    </div>`;
+  // replaced by logMeeting — kept for safety
 }
 
-function cancelLogMeeting(){
-  const el=document.getElementById('atl-meeting-prompt');
-  if(el) el.innerHTML=`<div class="atl-log-meeting" onclick="openLogMeetingPrompt('${currentActivityClientId}')">
-    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
-    <span class="atl-log-meeting-lbl">Log Meeting</span>
-  </div>`;
-}
+function cancelLogMeeting(){}
 
 async function saveLogMeeting(clientId){
-  const dtVal=document.getElementById('meet-dt')?.value;
-  const notesVal=document.getElementById('meet-notes')?.value.trim()||null;
-  if(!dtVal){ showToast('Please set a date/time'); return; }
-  const occurred_at=new Date(dtVal).toISOString();
-  const {data,error}=await SB.from('client_activities').insert({client_id:clientId,type:'meeting',occurred_at,notes:notesVal}).select().single();
-  if(error){ showToast('Error: '+error.message); return; }
-  CLIENT_ACTIVITIES=[data,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at));
-  // Re-render timeline section
-  const tlWrap=document.getElementById('atl-inner');
-  if(tlWrap) tlWrap.innerHTML=renderActivityTimeline(clientId);
-  cancelLogMeeting();
-  showToast('Meeting logged ✓');
+  // replaced by logMeeting
 }
 
 async function openC(c){
@@ -1193,11 +1162,6 @@ async function openC(c){
 
   // Load activities (async, then update)
   await loadClientActivities(c.id);
-
-  const meetingPromptHtml=`<div class="atl-log-meeting" onclick="openLogMeetingPrompt('${c.id}')">
-    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
-    <span class="atl-log-meeting-lbl">Log Meeting</span>
-  </div>`;
 
   document.getElementById('ps-client-body').innerHTML=`
     <div class="prof-back-row">
@@ -1235,7 +1199,6 @@ async function openC(c){
     <div class="prof-sec">
       <div class="sec-lbl">Activity Timeline</div>
       <div id="atl-inner">${renderActivityTimeline(c.id)}</div>
-      <div id="atl-meeting-prompt" style="margin-top:10px">${meetingPromptHtml}</div>
     </div>
     <div class="acts">
       <div class="act" onclick="openWaSheet(CLIENTS.find(x=>x.id==='${c.id}'),null)">
@@ -1250,6 +1213,10 @@ async function openC(c){
         <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
         <div><div class="act-t">Log WhatsApp</div><div class="act-s">Mark message sent — resets clock</div></div>
       </div>
+      <div class="act" onclick="logMeeting(CLIENTS.find(x=>x.id==='${c.id}'))">
+        <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <div><div class="act-t">Log Meeting</div><div class="act-s">Record an in-person meeting</div></div>
+      </div>
       <div class="act" onclick="openDealModal('${c.id}',null)">
         <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
         <div><div class="act-t">Add Deal</div><div class="act-s">Log a new deal for this client</div></div>
@@ -1259,7 +1226,7 @@ async function openC(c){
   pushProf('ps-client');
 }
 
-// ── LOG CALL / WA ─────────────────────────────────────────────────
+// ── LOG CALL / WA / MEETING ───────────────────────────────────────
 async function logCall(c){
   if(!c) return;
   const now=new Date();
@@ -1287,6 +1254,16 @@ async function logWa(c){
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
   rHome(); if(curTab==='clients') rClients(); showToast('WhatsApp logged ✓');
+}
+async function logMeeting(c){
+  if(!c) return;
+  const now=new Date();
+  const {data:actData,error:actErr}=await SB.from('client_activities').insert({client_id:c.id,type:'meeting',occurred_at:now.toISOString()}).select().single();
+  if(actErr){ console.error('client_activities insert error:',actErr); return; }
+  if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
+  const tlInner=document.getElementById('atl-inner');
+  if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
+  showToast('Meeting logged ✓');
 }
 
 // ── PARTNERS ──────────────────────────────────────────────────────
