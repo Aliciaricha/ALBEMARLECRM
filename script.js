@@ -446,6 +446,7 @@ function editDealTask(id,e){
   e.stopPropagation();
   const t=homeDealTasks.find(x=>x.id===id); if(!t) return;
   const card=e.target.closest('.tc');
+  card.onclick=null;
   card.style.cssText='display:block;padding:14px 16px;cursor:default;border-color:var(--gold);background:rgba(138,109,62,0.06)';
   card.innerHTML=`<div class="dt-edit-form">
     <input class="dt-edit-input" id="dte-title-${id}" value="${t.title.replace(/"/g,'&quot;')}" placeholder="Task title…">
