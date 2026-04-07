@@ -1121,7 +1121,10 @@ async function saveActivityEdit(id){
   const {error}=await SB.from('client_activities').update({occurred_at,notes:notesVal}).eq('id',id);
   if(error){ showToast('Error saving'); return; }
   a.occurred_at=occurred_at; a.notes=notesVal;
-  cancelEditActivity(id);
+  // Re-sort and re-render the full timeline so order updates live
+  CLIENT_ACTIVITIES.sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at));
+  const tlInner=document.getElementById('atl-inner');
+  if(tlInner) tlInner.innerHTML=renderActivityTimeline(a.client_id);
   showToast('Activity updated ✓');
 }
 
