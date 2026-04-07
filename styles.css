@@ -309,6 +309,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .atl-dot.call svg { stroke: var(--blue); }
 .atl-dot.meet{ background: rgba(138,109,62,0.10); border: 0.5px solid var(--gold-border); }
 .atl-dot.meet svg { stroke: var(--gold); }
+.atl-dot.cam { background: rgba(42,95,168,0.10); border: 0.5px solid rgba(42,95,168,0.25); }
+.atl-dot.cam svg { stroke: var(--blue); }
 .atl-tail { flex: 1; width: 1.5px; background: rgba(0,0,0,0.07); margin-top: 4px; min-height: 10px; }
 .atl-entry:last-child .atl-tail { display: none; }
 .atl-body { flex: 1; min-width: 0; padding-top: 4px; }

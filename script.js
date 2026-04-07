@@ -1030,10 +1030,42 @@ function filterByCity(val){
 }
 
 // ── ACTIVITY TIMELINE ─────────────────────────────────────────────
-async function loadClientActivities(clientId){
+async function loadClientActivities(clientId, client){
   const {data,error}=await SB.from('client_activities').select('*').eq('client_id',clientId).order('occurred_at',{ascending:false});
-  if(error){ CLIENT_ACTIVITIES=[]; return; }
-  CLIENT_ACTIVITIES=data||[];
+  CLIENT_ACTIVITIES=error?[]:(data||[]);
+
+  // Backfill: if no call/wa activities exist yet, seed from last_call/last_wa
+  // (handles history logged before the timeline existed)
+  if(client){
+    const hasCall=CLIENT_ACTIVITIES.some(a=>a.type==='call');
+    const hasWa=CLIENT_ACTIVITIES.some(a=>a.type==='whatsapp');
+    if(!hasCall && client.call){
+      const {data:bf}=await SB.from('client_activities').insert({client_id:clientId,type:'call',occurred_at:new Date(client.call+'T12:00:00').toISOString()}).select().single();
+      if(bf) CLIENT_ACTIVITIES.push(bf);
+    }
+    if(!hasWa && client.wa){
+      const {data:bf}=await SB.from('client_activities').insert({client_id:clientId,type:'whatsapp',occurred_at:new Date(client.wa+'T12:00:00').toISOString()}).select().single();
+      if(bf) CLIENT_ACTIVITIES.push(bf);
+    }
+  }
+
+  // Merge campaign completions as synthetic entries
+  const {data:camComps}=await SB.from('campaign_completions').select('campaign_id,contact_id,created_at').eq('contact_type','client').eq('contact_id',clientId);
+  (camComps||[]).forEach(cc=>{
+    const cam=CAMPAIGNS.find(x=>x.id===cc.campaign_id); if(!cam) return;
+    const oat=cc.created_at||(cam.date&&cam.date!=='TBC'?new Date(cam.date+'T12:00:00').toISOString():new Date().toISOString());
+    CLIENT_ACTIVITIES.push({id:'cam-'+cc.campaign_id,client_id:clientId,type:'campaign',occurred_at:oat,notes:cam.name,_synthetic:true,_camId:cc.campaign_id});
+  });
+
+  CLIENT_ACTIVITIES.sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at));
+
+  // Reconcile last_wa/last_call to match the most recent real activity of each type
+  if(client){
+    const rWa=CLIENT_ACTIVITIES.filter(a=>a.type==='whatsapp'&&!a._synthetic)[0];
+    if(rWa){ const d=new Date(rWa.occurred_at).toISOString().split('T')[0]; if(d!==client.wa){ await SB.from('clients').update({last_wa:d}).eq('id',clientId); client.wa=d; } }
+    const rCall=CLIENT_ACTIVITIES.filter(a=>a.type==='call'&&!a._synthetic)[0];
+    if(rCall){ const d=new Date(rCall.occurred_at).toISOString().split('T')[0]; if(d!==client.call){ await SB.from('clients').update({last_call:d}).eq('id',clientId); client.call=d; } }
+  }
 }
 
 function fmtActivityDate(iso){
@@ -1053,31 +1085,32 @@ function toLocalDatetimeStr(iso){
 function activityIcon(type){
   if(type==='whatsapp') return `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
   if(type==='call')     return `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.6a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 3h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 10.91a16 16 0 0 0 5.61 5.61l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
+  if(type==='campaign') return `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
   return `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
 }
 
 function activityLabel(type){
   if(type==='whatsapp') return 'WhatsApp';
   if(type==='call')     return 'Call';
+  if(type==='campaign') return 'Campaign';
   return 'Meeting';
 }
 
 function renderActivityTimeline(clientId){
   const acts=CLIENT_ACTIVITIES.filter(a=>a.client_id===clientId);
   if(!acts.length) return `<div class="atl-empty">No activity logged yet.</div>`;
+  const dotClass=t=>t==='whatsapp'?'wa':t==='call'?'call':t==='campaign'?'cam':'meet';
   return `<div class="atl-wrap">${acts.map(a=>`
     <div class="atl-entry" id="atl-${a.id}">
       <div class="atl-rail">
-        <div class="atl-dot ${a.type==='whatsapp'?'wa':a.type==='call'?'call':'meet'}">${activityIcon(a.type)}</div>
+        <div class="atl-dot ${dotClass(a.type)}">${activityIcon(a.type)}</div>
         <div class="atl-tail"></div>
       </div>
       <div class="atl-body">
-        <div class="atl-type">${activityLabel(a.type)}</div>
+        <div class="atl-type">${activityLabel(a.type)}${a.type==='campaign'&&a.notes?` — ${a.notes}`:''}</div>
         <div class="atl-date">${fmtActivityDate(a.occurred_at)}</div>
-        ${a.notes?`<div class="atl-notes">${a.notes}</div>`:''}
-        <div class="atl-actions">
-          <span class="atl-edit-btn" onclick="startEditActivity('${a.id}')">Edit</span>
-        </div>
+        ${a.notes&&a.type!=='campaign'?`<div class="atl-notes">${a.notes}</div>`:''}
+        ${!a._synthetic?`<div class="atl-actions"><span class="atl-edit-btn" onclick="startEditActivity('${a.id}')">Edit</span></div>`:''}
       </div>
     </div>`).join('')}
   </div>`;
@@ -1121,8 +1154,18 @@ async function saveActivityEdit(id){
   const {error}=await SB.from('client_activities').update({occurred_at,notes:notesVal}).eq('id',id);
   if(error){ showToast('Error saving'); return; }
   a.occurred_at=occurred_at; a.notes=notesVal;
-  // Re-sort and re-render the full timeline so order updates live
   CLIENT_ACTIVITIES.sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at));
+  // Sync last_wa / last_call on the client record to match the most recent real activity
+  if(a.type==='whatsapp'||a.type==='call'){
+    const clientId=a.client_id;
+    const recent=CLIENT_ACTIVITIES.filter(x=>x.type===a.type&&!x._synthetic)[0];
+    if(recent){
+      const d=new Date(recent.occurred_at).toISOString().split('T')[0];
+      const client=CLIENTS.find(c=>c.id===clientId);
+      if(a.type==='whatsapp'&&client&&d!==client.wa){ await SB.from('clients').update({last_wa:d}).eq('id',clientId); client.wa=d; }
+      if(a.type==='call'&&client&&d!==client.call){ await SB.from('clients').update({last_call:d}).eq('id',clientId); client.call=d; }
+    }
+  }
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(a.client_id);
   showToast('Activity updated ✓');
@@ -1164,7 +1207,7 @@ async function openC(c){
   const camHtml=cCams.length?cCams.map(cam=>`<span class="pill p-cam" onclick="openCampaign(CAMPAIGNS.find(x=>x.id==='${cam.id}'))">${cam.name}</span>`).join(''):'';
 
   // Load activities (async, then update)
-  await loadClientActivities(c.id);
+  await loadClientActivities(c.id, c);
 
   document.getElementById('ps-client-body').innerHTML=`
     <div class="prof-back-row">
