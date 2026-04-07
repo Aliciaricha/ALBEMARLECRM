@@ -1151,9 +1151,7 @@ async function openC(c){
     <div class="prof-sec"><div class="sec-lbl">Deals & Commission</div>${dHtml}</div>
     ${c.notes?`<div class="prof-sec"><div class="sec-lbl">Notes</div><div class="sec-notes">${c.notes}</div></div>`:''}
     <div class="prof-sec">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="sec-lbl" style="margin-bottom:0">Activity Timeline</div>
-      </div>
+      <div class="sec-lbl">Activity Timeline</div>
       <div id="atl-inner">${renderActivityTimeline(c.id)}</div>
     </div>
     <div class="acts">
