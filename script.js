@@ -444,26 +444,7 @@ async function renderHomeDealTasks(){
   });
 }
 
-function editDealTask(id,e){
-  e.stopPropagation();
-  const t=homeDealTasks.find(x=>x.id===id); if(!t) return;
-  const card=e.target.closest('.tc');
-  card.onclick=null;
-  card.style.cssText='display:block;padding:14px 16px;cursor:default;border-color:var(--gold);background:rgba(138,109,62,0.06)';
-  card.innerHTML=`<div class="dt-edit-form">
-    <input class="dt-edit-input" id="dte-title-${id}" value="${t.title.replace(/"/g,'&quot;')}" placeholder="Task title…">
-    <input type="date" class="dt-edit-date" id="dte-date-${id}" value="${t.due_date||''}">
-    <div class="dt-edit-actions">
-      <button type="button" class="dt-save-btn">Save</button>
-      <button type="button" class="dt-cancel-btn">Cancel</button>
-      <button type="button" class="dt-delete-btn">Delete</button>
-    </div>
-  </div>`;
-  card.querySelector('.dt-save-btn').addEventListener('click',ev=>{ev.stopPropagation();saveDealTaskEdit(id);});
-  card.querySelector('.dt-cancel-btn').addEventListener('click',ev=>{ev.stopPropagation();renderHomeDealTasks();});
-  card.querySelector('.dt-delete-btn').addEventListener('click',ev=>{ev.stopPropagation();deleteDealTask(id,'home');});
-  card.querySelector('.dt-edit-date').addEventListener('click',ev=>ev.stopPropagation());
-}
+function editDealTask(id,e){ e.stopPropagation(); openTaskEditModal(id,'home'); }
 
 async function saveDealTaskEdit(id){
   const titleEl=document.getElementById('dte-title-'+id);
@@ -1872,28 +1853,45 @@ function renderDealTasks(){
   });
 }
 
-function editModalDealTask(id, e){
-  if(e) e.stopPropagation();
-  const t=dealTasks.find(x=>x.id===id); if(!t) return;
-  const item=document.getElementById('dti-'+id); if(!item) return;
-  item.style.display='block';
-  item.style.padding='10px 12px';
-  item.classList.add('editing');
-  item.innerHTML=`<div class="dt-edit-form">
-    <input class="dt-edit-input" id="dtm-title-${id}" value="${(t.title||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}" placeholder="Task title…">
-    <input type="date" class="dt-edit-date" id="dtm-date-${id}" value="${t.due_date||''}">
-    <div class="dt-edit-actions">
-      <button type="button" class="dt-save-btn">Save</button>
-      <button type="button" class="dt-cancel-btn">Cancel</button>
-      <button type="button" class="dt-delete-btn">Delete</button>
-    </div>
-  </div>`;
-  item.querySelector('.dt-save-btn').addEventListener('click',ev=>{ev.stopPropagation();saveModalDealTaskEdit(id);});
-  item.querySelector('.dt-cancel-btn').addEventListener('click',ev=>{ev.stopPropagation();renderDealTasks();});
-  item.querySelector('.dt-delete-btn').addEventListener('click',ev=>{ev.stopPropagation();deleteDealTask(id,'modal');});
-  item.querySelector('.dt-edit-date').addEventListener('click',ev=>ev.stopPropagation());
-  const inp=document.getElementById('dtm-title-'+id);
-  if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }
+function editModalDealTask(id,e){ if(e) e.stopPropagation(); openTaskEditModal(id,'modal'); }
+
+// ── TASK EDIT MODAL ───────────────────────────────────────────────
+let _teId=null,_teSrc=null;
+function openTaskEditModal(id,src){
+  const tasks=src==='home'?homeDealTasks:dealTasks;
+  const t=tasks.find(x=>x.id===id); if(!t) return;
+  _teId=id; _teSrc=src;
+  document.getElementById('te-title').value=t.title||'';
+  document.getElementById('te-date').value=t.due_date||'';
+  openModal('modal-task-edit');
+}
+async function saveTaskEdit(){
+  const title=document.getElementById('te-title').value.trim(); if(!title) return;
+  const due=document.getElementById('te-date').value||null;
+  const btn=document.querySelector('#modal-task-edit .form-submit');
+  if(btn){btn.textContent='Saving…';btn.disabled=true;}
+  const {error}=await SB.from('deal_tasks').update({title,due_date:due}).eq('id',_teId);
+  if(btn){btn.textContent='Save Changes';btn.disabled=false;}
+  if(error){ showToast('Could not update task'); return; }
+  const tasks=_teSrc==='home'?homeDealTasks:dealTasks;
+  const t=tasks.find(x=>x.id===_teId);
+  if(t){t.title=title;t.due_date=due;}
+  closeModal('modal-task-edit');
+  _teSrc==='home'?renderHomeDealTasks():renderDealTasks();
+  showToast('Task updated ✓');
+}
+async function deleteTaskEdit(){
+  const {error}=await SB.from('deal_tasks').delete().eq('id',_teId);
+  if(error){ showToast('Could not delete task'); return; }
+  closeModal('modal-task-edit');
+  if(_teSrc==='home'){
+    homeDealTasks=(homeDealTasks||[]).filter(t=>t.id!==_teId);
+    renderHomeDealTasks();
+  } else {
+    dealTasks=dealTasks.filter(t=>t.id!==_teId);
+    renderDealTasks();
+  }
+  showToast('Task deleted');
 }
 
 async function saveModalDealTaskEdit(id){

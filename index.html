@@ -697,6 +697,29 @@
   </div>
 </div>
 
+<!-- TASK EDIT MODAL -->
+<div class="modal-overlay" id="modal-task-edit" onclick="closeModalOut(event,'modal-task-edit')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Edit Task</div>
+    <div class="form-body">
+      <div class="form-field">
+        <label>Task</label>
+        <input type="text" id="te-title" placeholder="Task title…">
+      </div>
+      <div class="form-field">
+        <label>Due Date</label>
+        <input type="date" id="te-date">
+      </div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveTaskEdit()">Save Changes</button>
+      <div class="form-cancel" onclick="closeModal('modal-task-edit')">Cancel</div>
+      <div class="form-cancel" style="color:var(--red)" onclick="deleteTaskEdit()">Delete Task</div>
+    </div>
+  </div>
+</div>
+
 <script src="script.js" defer></script>
 </body>
 </html>
