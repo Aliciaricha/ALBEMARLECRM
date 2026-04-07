@@ -454,12 +454,15 @@ function editDealTask(id,e){
     <input class="dt-edit-input" id="dte-title-${id}" value="${t.title.replace(/"/g,'&quot;')}" placeholder="Task title…">
     <input type="date" class="dt-edit-date" id="dte-date-${id}" value="${t.due_date||''}">
     <div class="dt-edit-actions">
-      <button type="button" class="dt-save-btn" onclick="saveDealTaskEdit('${id}')">Save</button>
-      <button type="button" class="dt-cancel-btn" onclick="renderHomeDealTasks()">Cancel</button>
-      <button type="button" class="dt-delete-btn" onclick="deleteDealTask('${id}','home')">Delete</button>
+      <button type="button" class="dt-save-btn">Save</button>
+      <button type="button" class="dt-cancel-btn">Cancel</button>
+      <button type="button" class="dt-delete-btn">Delete</button>
     </div>
   </div>`;
-  document.getElementById('dte-title-'+id).focus();
+  card.querySelector('.dt-save-btn').addEventListener('click',ev=>{ev.stopPropagation();saveDealTaskEdit(id);});
+  card.querySelector('.dt-cancel-btn').addEventListener('click',ev=>{ev.stopPropagation();renderHomeDealTasks();});
+  card.querySelector('.dt-delete-btn').addEventListener('click',ev=>{ev.stopPropagation();deleteDealTask(id,'home');});
+  card.querySelector('.dt-edit-date').addEventListener('click',ev=>ev.stopPropagation());
 }
 
 async function saveDealTaskEdit(id){
@@ -1873,7 +1876,6 @@ function editModalDealTask(id, e){
   if(e) e.stopPropagation();
   const t=dealTasks.find(x=>x.id===id); if(!t) return;
   const item=document.getElementById('dti-'+id); if(!item) return;
-  // Switch to block layout so form isn't clipped by flex
   item.style.display='block';
   item.style.padding='10px 12px';
   item.classList.add('editing');
@@ -1881,11 +1883,15 @@ function editModalDealTask(id, e){
     <input class="dt-edit-input" id="dtm-title-${id}" value="${(t.title||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}" placeholder="Task title…">
     <input type="date" class="dt-edit-date" id="dtm-date-${id}" value="${t.due_date||''}">
     <div class="dt-edit-actions">
-      <button type="button" class="dt-save-btn" onclick="saveModalDealTaskEdit('${id}')">Save</button>
-      <button type="button" class="dt-cancel-btn" onclick="renderDealTasks()">Cancel</button>
-      <button type="button" class="dt-delete-btn" onclick="deleteDealTask('${id}','modal')">Delete</button>
+      <button type="button" class="dt-save-btn">Save</button>
+      <button type="button" class="dt-cancel-btn">Cancel</button>
+      <button type="button" class="dt-delete-btn">Delete</button>
     </div>
   </div>`;
+  item.querySelector('.dt-save-btn').addEventListener('click',ev=>{ev.stopPropagation();saveModalDealTaskEdit(id);});
+  item.querySelector('.dt-cancel-btn').addEventListener('click',ev=>{ev.stopPropagation();renderDealTasks();});
+  item.querySelector('.dt-delete-btn').addEventListener('click',ev=>{ev.stopPropagation();deleteDealTask(id,'modal');});
+  item.querySelector('.dt-edit-date').addEventListener('click',ev=>ev.stopPropagation());
   const inp=document.getElementById('dtm-title-'+id);
   if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }
 }
