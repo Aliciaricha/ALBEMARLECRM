@@ -1138,6 +1138,12 @@ function toggleTimelineEditMode(){
   const inner=document.getElementById('atl-inner');
   const btn=document.getElementById('atl-edit-toggle');
   if(!inner||!btn) return;
+  // Close any open edit form before toggling off
+  const openForm=inner.querySelector('.atl-edit-form');
+  if(openForm){
+    const entryEl=openForm.closest('.atl-entry');
+    if(entryEl) cancelEditActivity(entryEl.id.replace('atl-',''));
+  }
   const on=inner.classList.toggle('edit-mode');
   btn.innerHTML=on
     ?`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
@@ -1151,10 +1157,7 @@ function cancelEditActivity(id){
   body.innerHTML=`
     <div class="atl-type">${activityLabel(a.type)}${a.type==='campaign'&&a.notes?` — ${a.notes}`:''}</div>
     <div class="atl-date">${fmtActivityDate(a.occurred_at)}</div>
-    ${a.notes&&a.type!=='campaign'?`<div class="atl-notes">${a.notes}</div>`:''}
-    <div class="atl-actions">
-      <span class="atl-edit-btn" onclick="startEditActivity('${a.id}')">Edit</span>
-    </div>`;
+    ${a.notes&&a.type!=='campaign'?`<div class="atl-notes">${a.notes}</div>`:''}`;
 }
 
 async function saveActivityEdit(id){
@@ -1163,19 +1166,18 @@ async function saveActivityEdit(id){
   if(!dtVal){ showToast('Please set a date'); return; }
   const occurred_at=new Date(dtVal+'T12:00:00').toISOString();
   const isCam=a._synthetic&&a._camId;
+  let saveError=false;
   if(isCam){
     const {error}=await SB.from('campaign_completions').update({created_at:occurred_at}).eq('campaign_id',a._camId).eq('contact_type','client').eq('contact_id',a.client_id);
-    if(error){ showToast('Error saving'); return; }
-    a.occurred_at=occurred_at;
+    if(error){ showToast('Error saving'); saveError=true; } else { a.occurred_at=occurred_at; }
   } else {
     const notesVal=document.getElementById('atl-notes-'+id)?.value.trim()||null;
     const {error}=await SB.from('client_activities').update({occurred_at,notes:notesVal}).eq('id',id);
-    if(error){ showToast('Error saving'); return; }
-    a.occurred_at=occurred_at; a.notes=notesVal;
+    if(error){ showToast('Error saving'); saveError=true; } else { a.occurred_at=occurred_at; a.notes=notesVal; }
   }
+  // Always close the form regardless of save outcome
   CLIENT_ACTIVITIES.sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at));
-  // Sync last_wa / last_call on the client record to match the most recent real activity
-  if(a.type==='whatsapp'||a.type==='call'){
+  if(!saveError && (a.type==='whatsapp'||a.type==='call')){
     const clientId=a.client_id;
     const recent=CLIENT_ACTIVITIES.filter(x=>x.type===a.type&&!x._synthetic)[0];
     if(recent){
@@ -1186,8 +1188,8 @@ async function saveActivityEdit(id){
     }
   }
   const tlInner=document.getElementById('atl-inner');
-  if(tlInner) tlInner.innerHTML=renderActivityTimeline(a.client_id);
-  showToast('Activity updated ✓');
+  if(tlInner){ const wasEditing=tlInner.classList.contains('edit-mode'); tlInner.innerHTML=renderActivityTimeline(a.client_id); if(wasEditing) tlInner.classList.add('edit-mode'); }
+  if(!saveError) showToast('Activity updated ✓');
 }
 
 async function deleteActivity(id){
