@@ -448,14 +448,14 @@ function editDealTask(id,e){
   e.stopPropagation();
   const t=homeDealTasks.find(x=>x.id===id); if(!t) return;
   const card=e.target.closest('.tc');
-  card.style.cssText='display:block;padding:14px 16px;cursor:default';
+  card.style.cssText='display:block;padding:14px 16px;cursor:default;border-color:var(--gold);background:rgba(138,109,62,0.06)';
   card.innerHTML=`<div class="dt-edit-form">
     <input class="dt-edit-input" id="dte-title-${id}" value="${t.title.replace(/"/g,'&quot;')}" placeholder="Task title…">
     <input type="date" class="dt-edit-date" id="dte-date-${id}" value="${t.due_date||''}">
     <div class="dt-edit-actions">
-      <button class="dt-save-btn" onclick="saveDealTaskEdit('${id}')">Save</button>
-      <span class="dt-cancel-btn" onclick="renderHomeDealTasks()">Cancel</span>
-      <span class="dt-delete-btn" onclick="deleteDealTask('${id}','home')">Delete</span>
+      <button type="button" class="dt-save-btn" onclick="saveDealTaskEdit('${id}')">Save</button>
+      <button type="button" class="dt-cancel-btn" onclick="renderHomeDealTasks()">Cancel</button>
+      <button type="button" class="dt-delete-btn" onclick="deleteDealTask('${id}','home')">Delete</button>
     </div>
   </div>`;
   document.getElementById('dte-title-'+id).focus();
@@ -1875,13 +1875,14 @@ function editModalDealTask(id, e){
   // Switch to block layout so form isn't clipped by flex
   item.style.display='block';
   item.style.padding='10px 12px';
+  item.classList.add('editing');
   item.innerHTML=`<div class="dt-edit-form">
     <input class="dt-edit-input" id="dtm-title-${id}" value="${(t.title||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}" placeholder="Task title…">
     <input type="date" class="dt-edit-date" id="dtm-date-${id}" value="${t.due_date||''}">
     <div class="dt-edit-actions">
-      <button class="dt-save-btn" onclick="saveModalDealTaskEdit('${id}')">Save</button>
-      <span class="dt-cancel-btn" onclick="renderDealTasks()">Cancel</span>
-      <span class="dt-delete-btn" onclick="deleteDealTask('${id}','modal')">Delete</span>
+      <button type="button" class="dt-save-btn" onclick="saveModalDealTaskEdit('${id}')">Save</button>
+      <button type="button" class="dt-cancel-btn" onclick="renderDealTasks()">Cancel</button>
+      <button type="button" class="dt-delete-btn" onclick="deleteDealTask('${id}','modal')">Delete</button>
     </div>
   </div>`;
   const inp=document.getElementById('dtm-title-'+id);
