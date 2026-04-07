@@ -1,1 +1,1 @@
-$(cat /tmp/styles_decoded.css)
+* { box-sizing: border-box; }
