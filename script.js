@@ -1108,8 +1108,10 @@ function renderActivityTimeline(clientId){
         <div class="atl-type">${activityLabel(a.type)}${a.type==='campaign'&&a.notes?` — ${a.notes}`:''}</div>
         <div class="atl-date">${fmtActivityDate(a.occurred_at)}</div>
         ${a.notes&&a.type!=='campaign'?`<div class="atl-notes">${a.notes}</div>`:''}
-        <div class="atl-actions"><span class="atl-edit-btn" onclick="startEditActivity('${a.id}')">Edit</span></div>
       </div>
+      <button class="atl-entry-edit" onclick="startEditActivity('${a.id}')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
     </div>`).join('')}
   </div>`;
 }
@@ -1129,6 +1131,16 @@ function startEditActivity(id){
         ${!isCam?`<span class="atl-delete-btn" onclick="deleteActivity('${id}')">Delete</span>`:''}
       </div>
     </div>`;
+}
+
+function toggleTimelineEditMode(){
+  const inner=document.getElementById('atl-inner');
+  const btn=document.getElementById('atl-edit-toggle');
+  if(!inner||!btn) return;
+  const on=inner.classList.toggle('edit-mode');
+  btn.innerHTML=on
+    ?`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+    :`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 }
 
 function cancelEditActivity(id){
@@ -1249,7 +1261,10 @@ async function openC(c){
     <div class="prof-sec"><div class="sec-lbl">Deals & Commission</div>${dHtml}</div>
     ${c.notes?`<div class="prof-sec"><div class="sec-lbl">Notes</div><div class="sec-notes">${c.notes}</div></div>`:''}
     <div class="prof-sec">
-      <div class="sec-lbl">Activity Timeline</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="sec-lbl" style="margin-bottom:0">Activity Timeline</div>
+        <button class="atl-edit-toggle" id="atl-edit-toggle" onclick="toggleTimelineEditMode()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+      </div>
       <div id="atl-inner">${renderActivityTimeline(c.id)}</div>
     </div>
     <div class="acts">
