@@ -43,6 +43,7 @@ let clientFilters={relationship:null, nw:null, interest:null}; // active filter 
 let selSegVal='All', editSegVal='All';
 let editClientId=null, editPartnerId=null, editCampaignId=null;
 let editingDealId=null;
+let editingTaskId=null;
 let editRecId=null;
 let homeTab='deals', homeDealTasks=null;
 let doneDealTasksToday = 0;
@@ -351,6 +352,41 @@ function rHome(){
       list.appendChild(el);
     });
   });
+  addTodayDealTasksToNetwork(list,gi);
+}
+
+async function addTodayDealTasksToNetwork(list, gi){
+  const todayStr=new Date().toISOString().split('T')[0];
+  let todayDeal=[];
+  if(homeDealTasks!==null){
+    todayDeal=homeDealTasks.filter(t=>t.due_date===todayStr&&!t.done);
+  } else {
+    const {data}=await SB.from('deal_tasks').select('*').eq('done',false).eq('due_date',todayStr);
+    todayDeal=data||[];
+  }
+  if(!todayDeal.length) return;
+  // Don't add if list was already replaced (tab switch)
+  if(!list.isConnected) return;
+  const hdr=document.createElement('div');
+  hdr.className='task-group-hdr'; hdr.textContent='Deals';
+  list.appendChild(hdr);
+  todayDeal.forEach(t=>{
+    const deal=DEALS.find(d=>d.id===t.deal_id);
+    const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
+    const act=client?`${t.title} \u2014 ${client.name}`:t.title;
+    const el=document.createElement('div');
+    el.className='tc normal a'; el.style.animationDelay=(gi++*0.04)+'s';
+    el.innerHTML=`<div class="tc-av deal-tc-av">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
+      <div class="tc-body" style="cursor:pointer"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
+      <div class="chk">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>`;
+    el.querySelector('.chk').onclick=(ev)=>tickDealTask(t.id,el.querySelector('.chk'),ev);
+    if(deal) el.onclick=(ev)=>{if(ev.target.closest('.chk')) return; openDealModal(deal.clientId,deal.id);};
+    list.appendChild(el);
+  });
 }
 
 function switchHomeTab(tab){
@@ -359,6 +395,12 @@ function switchHomeTab(tab){
   homeTab=tab; homeDealTasks=null;
   document.querySelectorAll('.home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   rHome();
+}
+
+function fmtDate(str){
+  if(!str) return '';
+  const d=new Date(str+'T00:00:00');
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
 }
 
 function dealTaskTimer(dueDate){
@@ -1729,23 +1771,66 @@ function renderDealTasks(){
     list.appendChild(empty); return;
   }
   dealTasks.forEach(t=>{
+    const isEditing=editingTaskId===t.id;
     const item=document.createElement('div');
-    item.className='deal-task-item'+(t.done?' done':'');
+    item.className='deal-task-item'+(t.done?' done':'')+(isEditing?' editing':'');
     item.id='dti-'+t.id;
 
-    const chk=document.createElement('div');
-    chk.className='deal-task-chk'+(t.done?' on':'');
-    chk.innerHTML=`<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="white"><polyline points="20 6 9 17 4 12"/></svg>`;
-    chk.onclick=(e)=>{ e.stopPropagation(); toggleDealTask(t.id,!t.done); };
+    if(isEditing){
+      item.style.cssText='flex-wrap:wrap;gap:8px;padding:10px 12px;';
+      item.innerHTML=`
+        <input type="text" id="dti-etitle-${t.id}" value="${t.title.replace(/"/g,'&quot;')}" style="flex:1;min-width:100px;padding:7px 10px;border-radius:8px;border:0.5px solid var(--gold);background:rgba(255,255,255,0.9);font-family:Manrope;font-size:13px;color:var(--t1);outline:none;">
+        <input type="date" id="dti-edue-${t.id}" value="${t.due_date||''}" style="flex:0 0 120px;padding:7px 10px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.10);background:rgba(255,255,255,0.9);font-family:Manrope;font-size:13px;color:var(--t1);outline:none;">
+        <button class="deal-task-save" onclick="saveEditedDealTask('${t.id}')">Save</button>
+        <button class="deal-task-save" style="background:rgba(0,0,0,0.12);color:var(--t2);" onclick="cancelEditDealTask()">Cancel</button>`;
+      setTimeout(()=>{const el=document.getElementById('dti-etitle-'+t.id);if(el)el.focus();},40);
+    } else {
+      const chk=document.createElement('div');
+      chk.className='deal-task-chk'+(t.done?' on':'');
+      chk.innerHTML=`<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="white"><polyline points="20 6 9 17 4 12"/></svg>`;
+      chk.onclick=(e)=>{ e.stopPropagation(); toggleDealTask(t.id,!t.done); };
 
-    const info=document.createElement('div');
-    info.className='deal-task-info';
-    info.innerHTML=`<div class="deal-task-title-txt">${t.title}</div>${t.due_date?`<div class="deal-task-due">${t.due_date}</div>`:''}`;
+      const info=document.createElement('div');
+      info.className='deal-task-info';
+      info.innerHTML=`<div class="deal-task-title-txt">${t.title}</div>${t.due_date?`<div class="deal-task-due">${fmtDate(t.due_date)}</div>`:''}`;
 
-    item.appendChild(chk);
-    item.appendChild(info);
+      const editBtn=document.createElement('button');
+      editBtn.className='dt-edit-btn'; editBtn.title='Edit';
+      editBtn.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+      editBtn.onclick=(e)=>{ e.stopPropagation(); editingTaskId=t.id; renderDealTasks(); };
+
+      const delBtn=document.createElement('button');
+      delBtn.className='dt-edit-btn'; delBtn.title='Delete';
+      delBtn.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+      delBtn.onclick=(e)=>{ e.stopPropagation(); deleteDealTask(t.id,'modal'); };
+
+      item.appendChild(chk);
+      item.appendChild(info);
+      item.appendChild(editBtn);
+      item.appendChild(delBtn);
+    }
     list.appendChild(item);
   });
+}
+
+function cancelEditDealTask(){
+  editingTaskId=null;
+  renderDealTasks();
+}
+
+async function saveEditedDealTask(id){
+  const titleEl=document.getElementById('dti-etitle-'+id);
+  const dueEl=document.getElementById('dti-edue-'+id);
+  if(!titleEl) return;
+  const title=titleEl.value.trim(); if(!title) return;
+  const due=dueEl?dueEl.value||null:null;
+  const {error}=await SB.from('deal_tasks').update({title,due_date:due}).eq('id',id);
+  if(error){ showToast('Could not update task'); return; }
+  const t=dealTasks.find(x=>x.id===id);
+  if(t){ t.title=title; t.due_date=due; }
+  editingTaskId=null;
+  renderDealTasks();
+  showToast('Task updated ✓');
 }
 
 
