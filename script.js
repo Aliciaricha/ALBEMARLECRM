@@ -433,8 +433,6 @@ async function renderHomeDealTasks(){
         <div class="chk">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>`;
-      // Edit on body click
-      el.querySelector('.tc-body').onclick=(ev)=>editDealTask(t.id,ev);
       // Tick
       el.querySelector('.chk').onclick=(ev)=>tickDealTask(t.id,el.querySelector('.chk'),ev);
       // Open deal modal on card click (not body or chk)
@@ -444,20 +442,6 @@ async function renderHomeDealTasks(){
   });
 }
 
-function editDealTask(id,e){ e.stopPropagation(); openTaskEditModal(id,'home'); }
-
-async function saveDealTaskEdit(id){
-  const titleEl=document.getElementById('dte-title-'+id);
-  const dateEl=document.getElementById('dte-date-'+id);
-  const title=titleEl?.value.trim(); if(!title) return;
-  const due=dateEl?.value||null;
-  const btn=document.querySelector('.dt-save-btn'); if(btn){btn.textContent='…';btn.disabled=true;}
-  const {error}=await SB.from('deal_tasks').update({title,due_date:due}).eq('id',id);
-  if(error){ showToast('Could not update task'); renderHomeDealTasks(); return; }
-  const t=homeDealTasks.find(x=>x.id===id);
-  if(t){ t.title=title; t.due_date=due; }
-  renderHomeDealTasks(); showToast('Task updated ✓');
-}
 
 async function deleteDealTask(id, source){
   const {error}=await SB.from('deal_tasks').delete().eq('id',id);
@@ -1843,9 +1827,7 @@ function renderDealTasks(){
 
     const info=document.createElement('div');
     info.className='deal-task-info';
-    info.style.cursor='pointer';
     info.innerHTML=`<div class="deal-task-title-txt">${t.title}</div>${t.due_date?`<div class="deal-task-due">${t.due_date}</div>`:''}`;
-    info.onclick=(e)=>{ e.stopPropagation(); editModalDealTask(t.id,e); };
 
     item.appendChild(chk);
     item.appendChild(info);
@@ -1853,58 +1835,7 @@ function renderDealTasks(){
   });
 }
 
-function editModalDealTask(id,e){ if(e) e.stopPropagation(); openTaskEditModal(id,'modal'); }
 
-// ── TASK EDIT MODAL ───────────────────────────────────────────────
-let _teId=null,_teSrc=null;
-function openTaskEditModal(id,src){
-  const tasks=src==='home'?homeDealTasks:dealTasks;
-  const t=tasks.find(x=>x.id===id); if(!t) return;
-  _teId=id; _teSrc=src;
-  document.getElementById('te-title').value=t.title||'';
-  document.getElementById('te-date').value=t.due_date||'';
-  openModal('modal-task-edit');
-}
-async function saveTaskEdit(){
-  const title=document.getElementById('te-title').value.trim(); if(!title) return;
-  const due=document.getElementById('te-date').value||null;
-  const btn=document.querySelector('#modal-task-edit .form-submit');
-  if(btn){btn.textContent='Saving…';btn.disabled=true;}
-  const {error}=await SB.from('deal_tasks').update({title,due_date:due}).eq('id',_teId);
-  if(btn){btn.textContent='Save Changes';btn.disabled=false;}
-  if(error){ showToast('Could not update task'); return; }
-  const tasks=_teSrc==='home'?homeDealTasks:dealTasks;
-  const t=tasks.find(x=>x.id===_teId);
-  if(t){t.title=title;t.due_date=due;}
-  closeModal('modal-task-edit');
-  _teSrc==='home'?renderHomeDealTasks():renderDealTasks();
-  showToast('Task updated ✓');
-}
-async function deleteTaskEdit(){
-  const {error}=await SB.from('deal_tasks').delete().eq('id',_teId);
-  if(error){ showToast('Could not delete task'); return; }
-  closeModal('modal-task-edit');
-  if(_teSrc==='home'){
-    homeDealTasks=(homeDealTasks||[]).filter(t=>t.id!==_teId);
-    renderHomeDealTasks();
-  } else {
-    dealTasks=dealTasks.filter(t=>t.id!==_teId);
-    renderDealTasks();
-  }
-  showToast('Task deleted');
-}
-
-async function saveModalDealTaskEdit(id){
-  const title=document.getElementById('dtm-title-'+id)?.value.trim();
-  const due=document.getElementById('dtm-date-'+id)?.value||null;
-  if(!title) return;
-  const btn=document.querySelector(`#dti-${id} .dt-save-btn`); if(btn){btn.textContent='…';btn.disabled=true;}
-  const {error}=await SB.from('deal_tasks').update({title,due_date:due}).eq('id',id);
-  if(error){ showToast('Could not update task'); renderDealTasks(); return; }
-  const t=dealTasks.find(x=>x.id===id);
-  if(t){t.title=title; t.due_date=due;}
-  renderDealTasks(); showToast('Task updated ✓');
-}
 
 function toggleDealTaskForm(){
   const form=document.getElementById('nd-task-form');
