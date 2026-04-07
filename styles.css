@@ -321,19 +321,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .atl-date { font-size: 11px; color: var(--t3); margin-top: 2px; }
 .atl-notes { font-size: 11px; color: var(--t2); margin-top: 4px; line-height: 1.5; font-style: italic; }
 .atl-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
-.atl-edit-btn { font-size: 10px; font-weight: 600; color: var(--t3); cursor: pointer; padding: 3px 8px; border-radius: 8px; border: 0.5px solid rgba(0,0,0,0.08); background: rgba(255,255,255,0.60); transition: color 0.15s; }
-.atl-edit-btn:active { color: var(--gold); }
-.atl-edit-form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-.atl-edit-input { width: 100%; padding: 8px 11px; border-radius: 10px; border: 0.5px solid rgba(0,0,0,0.10); background: rgba(255,255,255,0.85); font-family: 'Manrope'; font-size: 12px; color: var(--t1); outline: none; -webkit-appearance: none; }
-.atl-edit-input:focus { border-color: var(--gold); }
-.atl-edit-btns { display: flex; align-items: center; gap: 10px; }
-.atl-save-btn { padding: 6px 14px; border-radius: 9px; border: none; background: var(--gold); color: white; font-family: 'Manrope'; font-size: 11px; font-weight: 600; cursor: pointer; }
-.atl-cancel-btn { font-size: 11px; color: var(--t3); cursor: pointer; padding: 4px; }
-.atl-delete-btn { font-size: 11px; color: var(--red); cursor: pointer; padding: 4px; margin-left: auto; font-weight: 600; }
 .atl-empty { font-size: 12px; color: var(--t3); font-style: italic; padding: 4px 0 2px; }
-.atl-edit-toggle { background: rgba(138,109,62,0.08); border: 0.5px solid var(--gold-border); border-radius: 8px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--gold); flex-shrink: 0; }
-.atl-inner.edit-mode .atl-entry { cursor: pointer; border-radius: 10px; transition: background 0.15s; }
-.atl-inner.edit-mode .atl-entry:active { background: rgba(138,109,62,0.07); }
 
 /* Recommendation notes */
 .rec-notes { font-size: 11px; color: var(--t3); margin-top: 3px; line-height: 1.5; }

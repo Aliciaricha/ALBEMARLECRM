@@ -1068,7 +1068,7 @@ function renderActivityTimeline(clientId){
   if(!acts.length) return `<div class="atl-empty">No activity logged yet.</div>`;
   const dotClass=t=>t==='whatsapp'?'wa':t==='call'?'call':t==='campaign'?'cam':'meet';
   return `<div class="atl-wrap">${acts.map(a=>`
-    <div class="atl-entry" id="atl-${a.id}" onclick="atlTap('${a.id}')">
+    <div class="atl-entry" id="atl-${a.id}">
       <div class="atl-rail">
         <div class="atl-dot ${dotClass(a.type)}">${activityIcon(a.type)}</div>
         <div class="atl-tail"></div>
@@ -1082,93 +1082,11 @@ function renderActivityTimeline(clientId){
   </div>`;
 }
 
-function startEditActivity(id){
-  const a=CLIENT_ACTIVITIES.find(x=>x.id===id); if(!a) return;
-  const entry=document.getElementById('atl-'+id); if(!entry) return;
-  const body=entry.querySelector('.atl-body');
-  const isCam=a._synthetic&&a._camId;
-  body.innerHTML=`
-    <div class="atl-edit-form">
-      <input class="atl-edit-input" type="date" id="atl-dt-${id}" value="${toLocalDateStr(a.occurred_at)}">
-      ${!isCam?`<input class="atl-edit-input" type="text" id="atl-notes-${id}" placeholder="Notes (optional)" value="${a.notes||''}">`:''}
-      <div class="atl-edit-btns">
-        <button class="atl-save-btn" onclick="saveActivityEdit('${id}')">Save</button>
-        <span class="atl-cancel-btn" onclick="cancelEditActivity('${id}')">Cancel</span>
-        ${!isCam?`<span class="atl-delete-btn" onclick="deleteActivity('${id}')">Delete</span>`:''}
-      </div>
-    </div>`;
-}
 
-function atlTap(id){
-  if(document.getElementById('atl-inner')?.classList.contains('edit-mode')) startEditActivity(id);
-}
 
-function toggleTimelineEditMode(){
-  const inner=document.getElementById('atl-inner');
-  const btn=document.getElementById('atl-edit-toggle');
-  if(!inner||!btn) return;
-  // Close any open edit form before toggling off
-  const openForm=inner.querySelector('.atl-edit-form');
-  if(openForm){
-    const entryEl=openForm.closest('.atl-entry');
-    if(entryEl) cancelEditActivity(entryEl.id.replace('atl-',''));
-  }
-  const on=inner.classList.toggle('edit-mode');
-  btn.innerHTML=on
-    ?`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
-    :`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
-}
 
-function cancelEditActivity(id){
-  const a=CLIENT_ACTIVITIES.find(x=>x.id===id); if(!a) return;
-  const entry=document.getElementById('atl-'+id); if(!entry) return;
-  const body=entry.querySelector('.atl-body');
-  body.innerHTML=`
-    <div class="atl-type">${activityLabel(a.type)}${a.type==='campaign'&&a.notes?` — ${a.notes}`:''}</div>
-    <div class="atl-date">${fmtActivityDate(a.occurred_at)}</div>
-    ${a.notes&&a.type!=='campaign'?`<div class="atl-notes">${a.notes}</div>`:''}`;
-}
 
-async function saveActivityEdit(id){
-  const a=CLIENT_ACTIVITIES.find(x=>x.id===id); if(!a) return;
-  const dtVal=document.getElementById('atl-dt-'+id)?.value;
-  if(!dtVal){ showToast('Please set a date'); return; }
-  const occurred_at=new Date(dtVal+'T12:00:00').toISOString();
-  const isCam=a._synthetic&&a._camId;
-  let saveError=false;
-  if(isCam){
-    const {error}=await SB.from('campaign_completions').update({created_at:occurred_at}).eq('campaign_id',a._camId).eq('contact_type','client').eq('contact_id',a.client_id);
-    if(error){ showToast('Error saving'); saveError=true; } else { a.occurred_at=occurred_at; }
-  } else {
-    const notesVal=document.getElementById('atl-notes-'+id)?.value.trim()||null;
-    const {error}=await SB.from('client_activities').update({occurred_at,notes:notesVal}).eq('id',id);
-    if(error){ showToast('Error saving'); saveError=true; } else { a.occurred_at=occurred_at; a.notes=notesVal; }
-  }
-  // Always close the form regardless of save outcome
-  CLIENT_ACTIVITIES.sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at));
-  if(!saveError && (a.type==='whatsapp'||a.type==='call')){
-    const clientId=a.client_id;
-    const recent=CLIENT_ACTIVITIES.filter(x=>x.type===a.type&&!x._synthetic)[0];
-    if(recent){
-      const d=new Date(recent.occurred_at).toISOString().split('T')[0];
-      const client=CLIENTS.find(c=>c.id===clientId);
-      if(a.type==='whatsapp'&&client&&d!==client.wa){ await SB.from('clients').update({last_wa:d}).eq('id',clientId); client.wa=d; }
-      if(a.type==='call'&&client&&d!==client.call){ await SB.from('clients').update({last_call:d}).eq('id',clientId); client.call=d; }
-    }
-  }
-  const tlInner=document.getElementById('atl-inner');
-  if(tlInner){ const wasEditing=tlInner.classList.contains('edit-mode'); tlInner.innerHTML=renderActivityTimeline(a.client_id); if(wasEditing) tlInner.classList.add('edit-mode'); }
-  if(!saveError) showToast('Activity updated ✓');
-}
 
-async function deleteActivity(id){
-  const {error}=await SB.from('client_activities').delete().eq('id',id);
-  if(error){ showToast('Error deleting'); return; }
-  CLIENT_ACTIVITIES=CLIENT_ACTIVITIES.filter(x=>x.id!==id);
-  const entry=document.getElementById('atl-'+id);
-  if(entry) entry.remove();
-  showToast('Deleted ✓');
-}
 
 async function openLogMeetingPrompt(clientId){
   // replaced by logMeeting — kept for safety
@@ -1235,7 +1153,6 @@ async function openC(c){
     <div class="prof-sec">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div class="sec-lbl" style="margin-bottom:0">Activity Timeline</div>
-        <button class="atl-edit-toggle" id="atl-edit-toggle" onclick="toggleTimelineEditMode()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
       </div>
       <div id="atl-inner">${renderActivityTimeline(c.id)}</div>
     </div>
