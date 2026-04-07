@@ -77,12 +77,13 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .dt-edit-btn { background: none; border: none; padding: 5px 6px; cursor: pointer; color: var(--t3); flex-shrink: 0; border-radius: 7px; line-height: 0; transition: color 0.15s; }
 .dt-edit-btn:active { color: var(--gold); }
 .dt-edit-form { width: 100%; display: flex; flex-direction: column; gap: 9px; }
-.dt-edit-input,.dt-edit-date { width: 100%; padding: 9px 12px; border-radius: var(--r-sm); border: 0.5px solid rgba(0,0,0,0.10); background: rgba(255,255,255,0.85); font-family: 'Manrope'; font-size: 13px; color: var(--t1); outline: none; box-sizing: border-box; -webkit-appearance: none; transition: border-color 0.15s; }
+.dt-edit-input,.dt-edit-date { width: 100%; padding: 9px 12px; border-radius: var(--r-sm); border: 0.5px solid rgba(0,0,0,0.10); background: rgba(255,255,255,0.85); font-family: 'Manrope'; font-size: 13px; color: var(--t1); outline: none; box-sizing: border-box; transition: border-color 0.15s; }
+.dt-edit-input { -webkit-appearance: none; }
 .dt-edit-input:focus,.dt-edit-date:focus { border-color: var(--gold); }
 .dt-edit-actions { display: flex; align-items: center; gap: 12px; }
-.dt-save-btn { padding: 7px 18px; border-radius: var(--r-sm); border: none; background: var(--gold); color: white; font-family: 'Manrope'; font-size: 12px; font-weight: 600; cursor: pointer; }
-.dt-cancel-btn { font-size: 12px; color: var(--t3); cursor: pointer; padding: 4px; }
-.dt-delete-btn { font-size: 12px; color: var(--red); cursor: pointer; padding: 4px; margin-left: auto; font-weight: 600; }
+.dt-save-btn { padding: 7px 18px; border-radius: var(--r-sm); border: none; background: var(--gold); color: white; font-family: 'Manrope'; font-size: 12px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.dt-cancel-btn { font-size: 12px; color: var(--t3); cursor: pointer; padding: 4px; background: none; border: none; font-family: 'Manrope'; -webkit-tap-highlight-color: transparent; }
+.dt-delete-btn { font-size: 12px; color: var(--red); cursor: pointer; padding: 4px; margin-left: auto; font-weight: 600; background: none; border: none; font-family: 'Manrope'; -webkit-tap-highlight-color: transparent; }
 .tasks { padding: 0 16px; display: flex; flex-direction: column; gap: 9px; }
 .tc { display: flex; align-items: center; gap: 13px; padding: 13px 14px; border-radius: var(--r-md); cursor: pointer; position: relative; overflow: hidden; transition: transform 0.14s; background: rgba(255,255,255,0.52); backdrop-filter: blur(24px) saturate(1.8); -webkit-backdrop-filter: blur(24px) saturate(1.8); border: 0.5px solid rgba(255,255,255,0.78); box-shadow: var(--sh), inset 0 1px 0 rgba(255,255,255,0.70); }
 .tc::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; }
@@ -126,8 +127,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .deal-task-addbtn { font-size: 11px; color: var(--gold); font-weight: 600; cursor: pointer; padding: 2px 0; }
 .deal-task-list { display: flex; flex-direction: column; gap: 7px; margin: 8px 0 4px; }
 .deal-task-empty { font-size: 12px; color: var(--t3); font-style: italic; padding: 4px 0; }
-.deal-task-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--r-sm); background: rgba(255,255,255,0.70); border: 0.5px solid rgba(0,0,0,0.07); transition: opacity 0.15s; }
+.deal-task-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--r-sm); background: rgba(255,255,255,0.70); border: 0.5px solid rgba(0,0,0,0.07); transition: border-color 0.15s, background 0.15s, opacity 0.15s; }
 .deal-task-item.done { opacity: 0.45; }
+.deal-task-item.editing { border-color: var(--gold); background: rgba(138,109,62,0.06); }
 .deal-task-chk { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid rgba(0,0,0,0.15); flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
 .deal-task-chk.on { background: var(--gold); border-color: var(--gold); }
 .deal-task-info { flex: 1; min-width: 0; }
