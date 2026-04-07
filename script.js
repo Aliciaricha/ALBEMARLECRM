@@ -1071,15 +1071,13 @@ async function loadClientActivities(clientId, client){
 function fmtActivityDate(iso){
   const d=new Date(iso);
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const hh=String(d.getHours()).padStart(2,'0');
-  const mm=String(d.getMinutes()).padStart(2,'0');
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()} · ${hh}:${mm}`;
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function toLocalDatetimeStr(iso){
+function toLocalDateStr(iso){
   const d=new Date(iso);
   const pad=n=>String(n).padStart(2,'0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
 
 function activityIcon(type){
@@ -1110,7 +1108,7 @@ function renderActivityTimeline(clientId){
         <div class="atl-type">${activityLabel(a.type)}${a.type==='campaign'&&a.notes?` — ${a.notes}`:''}</div>
         <div class="atl-date">${fmtActivityDate(a.occurred_at)}</div>
         ${a.notes&&a.type!=='campaign'?`<div class="atl-notes">${a.notes}</div>`:''}
-        ${!a._synthetic?`<div class="atl-actions"><span class="atl-edit-btn" onclick="startEditActivity('${a.id}')">Edit</span></div>`:''}
+        <div class="atl-actions"><span class="atl-edit-btn" onclick="startEditActivity('${a.id}')">Edit</span></div>
       </div>
     </div>`).join('')}
   </div>`;
@@ -1120,14 +1118,15 @@ function startEditActivity(id){
   const a=CLIENT_ACTIVITIES.find(x=>x.id===id); if(!a) return;
   const entry=document.getElementById('atl-'+id); if(!entry) return;
   const body=entry.querySelector('.atl-body');
+  const isCam=a._synthetic&&a._camId;
   body.innerHTML=`
     <div class="atl-edit-form">
-      <input class="atl-edit-input" type="datetime-local" id="atl-dt-${id}" value="${toLocalDatetimeStr(a.occurred_at)}">
-      <input class="atl-edit-input" type="text" id="atl-notes-${id}" placeholder="Notes (optional)" value="${a.notes||''}">
+      <input class="atl-edit-input" type="date" id="atl-dt-${id}" value="${toLocalDateStr(a.occurred_at)}">
+      ${!isCam?`<input class="atl-edit-input" type="text" id="atl-notes-${id}" placeholder="Notes (optional)" value="${a.notes||''}">`:''}
       <div class="atl-edit-btns">
         <button class="atl-save-btn" onclick="saveActivityEdit('${id}')">Save</button>
         <span class="atl-cancel-btn" onclick="cancelEditActivity('${id}')">Cancel</span>
-        <span class="atl-delete-btn" onclick="deleteActivity('${id}')">Delete</span>
+        ${!isCam?`<span class="atl-delete-btn" onclick="deleteActivity('${id}')">Delete</span>`:''}
       </div>
     </div>`;
 }
@@ -1137,9 +1136,9 @@ function cancelEditActivity(id){
   const entry=document.getElementById('atl-'+id); if(!entry) return;
   const body=entry.querySelector('.atl-body');
   body.innerHTML=`
-    <div class="atl-type">${activityLabel(a.type)}</div>
+    <div class="atl-type">${activityLabel(a.type)}${a.type==='campaign'&&a.notes?` — ${a.notes}`:''}</div>
     <div class="atl-date">${fmtActivityDate(a.occurred_at)}</div>
-    ${a.notes?`<div class="atl-notes">${a.notes}</div>`:''}
+    ${a.notes&&a.type!=='campaign'?`<div class="atl-notes">${a.notes}</div>`:''}
     <div class="atl-actions">
       <span class="atl-edit-btn" onclick="startEditActivity('${a.id}')">Edit</span>
     </div>`;
@@ -1148,12 +1147,19 @@ function cancelEditActivity(id){
 async function saveActivityEdit(id){
   const a=CLIENT_ACTIVITIES.find(x=>x.id===id); if(!a) return;
   const dtVal=document.getElementById('atl-dt-'+id)?.value;
-  const notesVal=document.getElementById('atl-notes-'+id)?.value.trim()||null;
-  if(!dtVal){ showToast('Please set a date/time'); return; }
-  const occurred_at=new Date(dtVal).toISOString();
-  const {error}=await SB.from('client_activities').update({occurred_at,notes:notesVal}).eq('id',id);
-  if(error){ showToast('Error saving'); return; }
-  a.occurred_at=occurred_at; a.notes=notesVal;
+  if(!dtVal){ showToast('Please set a date'); return; }
+  const occurred_at=new Date(dtVal+'T12:00:00').toISOString();
+  const isCam=a._synthetic&&a._camId;
+  if(isCam){
+    const {error}=await SB.from('campaign_completions').update({created_at:occurred_at}).eq('campaign_id',a._camId).eq('contact_type','client').eq('contact_id',a.client_id);
+    if(error){ showToast('Error saving'); return; }
+    a.occurred_at=occurred_at;
+  } else {
+    const notesVal=document.getElementById('atl-notes-'+id)?.value.trim()||null;
+    const {error}=await SB.from('client_activities').update({occurred_at,notes:notesVal}).eq('id',id);
+    if(error){ showToast('Error saving'); return; }
+    a.occurred_at=occurred_at; a.notes=notesVal;
+  }
   CLIENT_ACTIVITIES.sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at));
   // Sync last_wa / last_call on the client record to match the most recent real activity
   if(a.type==='whatsapp'||a.type==='call'){
