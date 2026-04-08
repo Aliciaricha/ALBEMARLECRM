@@ -1818,7 +1818,7 @@ async function saveCampaign(){
   const row={
     name, type:document.getElementById('ncam-type').value,
     segment:selSegVal||'All', occasion:document.getElementById('ncam-occ').value.trim(),
-    date:document.getElementById('ncam-date').value.trim()||'TBC',
+    date:document.getElementById('ncam-type').value==='Seasonal'?'TBC':(document.getElementById('ncam-date').value||'TBC'),
     notes:document.getElementById('ncam-notes').value.trim(),
     template:document.getElementById('ncam-template').value.trim()||null,
     wa_image: ncam_imageData?JSON.stringify(ncam_imageData):null,
@@ -1834,13 +1834,27 @@ async function saveCampaign(){
   rCampaigns(); updateHomeStats(); showToast('Campaign added ✓');
 }
 
+function ecamToggleDateForType(type){
+  const dateInput=document.getElementById('ecam-date');
+  const note=document.getElementById('ecam-date-note');
+  const isSeasonal=type==='Seasonal';
+  dateInput.disabled=isSeasonal;
+  dateInput.style.opacity=isSeasonal?'0.35':'1';
+  note.style.display=isSeasonal?'block':'none';
+}
+
 function openEditCampaign(id){
   const cam=CAMPAIGNS.find(x=>x.id===id); if(!cam) return;
   editCampaignId=id; editSegVal=cam.seg||'All';
   ecam_imageData=null;
   document.getElementById('ecam-name').value=cam.name;
-  document.getElementById('ecam-type').value=cam.type;
-  document.getElementById('ecam-date').value=cam.date;
+  const typeEl=document.getElementById('ecam-type');
+  typeEl.value=cam.type;
+  typeEl.onchange=()=>ecamToggleDateForType(typeEl.value);
+  // Only set date input if it's a valid YYYY-MM-DD string
+  const dateEl=document.getElementById('ecam-date');
+  dateEl.value=isValidDateStr(cam.date)&&cam.date!=='TBC'&&cam.date!=='Ongoing'?cam.date:'';
+  ecamToggleDateForType(cam.type);
   document.getElementById('ecam-occ').value=cam.occ||'';
   document.getElementById('ecam-notes').value=cam.notes||'';
   document.getElementById('ecam-template').value=cam.template||'';
@@ -1867,7 +1881,7 @@ async function saveEditCampaign(){
   const updates={
     name:document.getElementById('ecam-name').value.trim()||cam.name,
     type:document.getElementById('ecam-type').value,
-    date:document.getElementById('ecam-date').value.trim()||cam.date,
+    date:document.getElementById('ecam-type').value==='Seasonal'?cam.date:(document.getElementById('ecam-date').value||cam.date),
     segment:editSegVal,
     occasion:document.getElementById('ecam-occ').value.trim(),
     notes:document.getElementById('ecam-notes').value.trim(),

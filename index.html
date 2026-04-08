@@ -429,9 +429,9 @@
       <div class="form-field"><label>Campaign Title</label><input type="text" id="ncam-name" placeholder="Campaign name"></div>
       <div class="form-row">
         <div class="form-field"><label>Type</label>
-          <select id="ncam-type"><option>Follow-Up</option><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
+          <select id="ncam-type" onchange="document.getElementById('ncam-date-row').style.display=this.value==='Seasonal'?'none':'block'"><option>Follow-Up</option><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
         </div>
-        <div class="form-field"><label>Date</label><input type="text" id="ncam-date" placeholder="e.g. 20 Apr 2026"></div>
+        <div class="form-field" id="ncam-date-row"><label>Date</label><input type="date" id="ncam-date"></div>
       </div>
       <div class="form-field"><label>Segment</label>
         <div class="seg-chips" id="seg-chips">
@@ -479,7 +479,7 @@
         <div class="form-field"><label>Type</label>
           <select id="ecam-type"><option>Follow-Up</option><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
         </div>
-        <div class="form-field"><label>Date</label><input type="text" id="ecam-date"></div>
+        <div class="form-field" id="ecam-date-row"><label>Date</label><input type="date" id="ecam-date"><div id="ecam-date-note" style="display:none;font-size:11px;color:var(--t3);margin-top:4px;">Date is managed automatically for Seasonal campaigns.</div></div>
       </div>
       <div class="form-field"><label>Segment</label>
         <div class="seg-chips" id="edit-seg-chips">
