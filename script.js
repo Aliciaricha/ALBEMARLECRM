@@ -82,6 +82,9 @@ async function loadAll(){
   CAMPAIGNS = (camR.data||[]).map(normaliseCampaign);
   RECS      = recR.data||[];
 
+  // Reset annual campaigns whose grace period (1 day after date) has elapsed
+  await checkAndResetAnnualCampaigns();
+
   // Task done state — only keep if reset_date is today
   doneTasks = new Set(
     (taskR.data||[]).filter(t => t.reset_date === today).map(t=>t.task_key)
@@ -132,6 +135,89 @@ function normaliseCampaign(r){
     includeAllPartners: r.include_all_partners||false,
     includeAllRolodex: r.include_all_rolodex||false,
   };
+}
+
+// ── ANNUAL CAMPAIGN RESET ─────────────────────────────────────────
+// Easter Sunday via Meeus/Jones/Butcher algorithm
+function easterDate(year){
+  const a=year%19,b=Math.floor(year/100),c=year%100;
+  const d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
+  const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
+  const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
+  const m=Math.floor((a+11*h+22*l)/451);
+  const month=Math.floor((h+l-7*m+114)/31);
+  const day=((h+l-7*m+114)%31)+1;
+  return new Date(year,month-1,day);
+}
+
+// Eid al-Fitr approximate dates (based on Saudi/global moon sighting)
+const EID_FITR={
+  2024:'2024-04-10',2025:'2025-03-30',2026:'2026-03-20',
+  2027:'2027-03-09',2028:'2028-02-26',2029:'2029-02-14',
+  2030:'2030-02-04',2031:'2031-01-24',2032:'2032-01-13',
+  2033:'2033-01-02',2034:'2034-12-23',2035:'2035-12-12',
+};
+// Eid al-Adha approximate dates
+const EID_ADHA={
+  2024:'2024-06-16',2025:'2025-06-06',2026:'2026-05-26',
+  2027:'2027-05-16',2028:'2028-05-04',2029:'2029-04-24',
+  2030:'2030-04-13',2031:'2031-04-02',2032:'2032-03-22',
+  2033:'2033-03-11',2034:'2034-03-01',2035:'2035-02-18',
+};
+
+function nextAnnualDate(cam, afterDate){
+  const lname=(cam.name+' '+cam.occ).toLowerCase();
+
+  if(lname.includes('easter')){
+    let year=afterDate.getFullYear();
+    let e=easterDate(year);
+    if(e<=afterDate) e=easterDate(year+1);
+    return e.toISOString().split('T')[0];
+  }
+
+  if(lname.includes('eid')){
+    let table;
+    if(lname.includes('adha'))      table=EID_ADHA;
+    else if(lname.includes('fitr')) table=EID_FITR;
+    else {
+      // Guess from current campaign date: May–Aug → Adha, else Fitr
+      const cm=new Date(cam.date+'T00:00:00').getMonth()+1;
+      table=(cm>=5&&cm<=8)?EID_ADHA:EID_FITR;
+    }
+    for(let y=afterDate.getFullYear();y<=afterDate.getFullYear()+3;y++){
+      const ds=table[y]; if(!ds) continue;
+      const d=new Date(ds+'T00:00:00');
+      if(d>afterDate) return ds;
+    }
+    // Fallback: subtract ~10.875 days from current date per Islamic year shift
+    const base=new Date(cam.date+'T00:00:00');
+    base.setTime(base.getTime()+354.36707*86400000);
+    return base.toISOString().split('T')[0];
+  }
+
+  // Generic annual: add 1 year (JS handles Feb 29 → Feb 28 automatically)
+  const d=new Date(cam.date+'T00:00:00');
+  d.setFullYear(d.getFullYear()+1);
+  return d.toISOString().split('T')[0];
+}
+
+async function checkAndResetAnnualCampaigns(){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const annual=['Seasonal','Triggered'];
+  const toReset=CAMPAIGNS.filter(c=>{
+    if(!annual.includes(c.type)) return false;
+    if(!c.date||c.date==='TBC'||c.date==='Ongoing') return false;
+    const d=new Date(c.date+'T00:00:00'); d.setHours(0,0,0,0);
+    return Math.floor((d-today)/86400000)<=-2; // 2+ days past = grace period elapsed
+  });
+  if(!toReset.length) return;
+  for(const cam of toReset){
+    const newDate=nextAnnualDate(cam,today);
+    await SB.from('campaigns').update({date:newDate}).eq('id',cam.id);
+    await SB.from('campaign_completions').delete().eq('campaign_id',cam.id);
+    cam.date=newDate; // update local state
+  }
+  if(toReset.length) showToast(`${toReset.length} campaign${toReset.length>1?'s':''} reset for next year`);
 }
 
 // ── SEGMENT & TASK LOGIC ──────────────────────────────────────────
