@@ -214,24 +214,33 @@ function mkTasks(){
     try{ const d=new Date(c.date); const diff=Math.floor((d-TODAY)/86400000); if(c.type==='Triggered') return diff>=0&&diff<=3; return diff>=-3&&diff<=30; }catch(e){ return false; }
   });
 
-  const camCovered = new Map();
-  activeCams.forEach(cam=>{ getCampaignClients(cam).forEach(c=>{ if(!camCovered.has(c.id)) camCovered.set(c.id,cam); }); });
+  // Campaign pass: one task per client per active campaign, regardless of cadence
+  const camCoveredIds = new Set();
+  activeCams.forEach(cam=>{
+    const camWhy=campaignTiming(cam);
+    const clients=getCampaignClients(cam);
+    if(!clients.length){
+      const standaloneWhy=`0 clients · ${camWhy}`;
+      t.push({id:'cam-'+cam.id, nm:'Campaign', act:cam.name,
+        why:standaloneWhy, urg:'soon', pri:25, isCam:true, camId:cam.id, clientObj:null});
+      return;
+    }
+    clients.forEach(c=>{
+      camCoveredIds.add(c.id);
+      const rel=REL_CADENCES[c.relationship];
+      t.push({id:'cam-'+cam.id+'-'+c.id, nm:c.name, act:cam.name+' — '+c.name,
+        why:camWhy, urg:'soon', pri:(rel?rel.p*10:20)+2, isCam:true, camId:cam.id, clientObj:c});
+    });
+  });
 
+  // Cadence pass: clients NOT covered by any active campaign
   CLIENTS.forEach(c=>{
+    if(camCoveredIds.has(c.id)) return;
     const rel=REL_CADENCES[c.relationship];
     if(!rel||c.relationship==='Archive'||!c.relationship) return;
     const wa=daysSince(c.wa), cl=daysSince(c.call);
     const waDue=rel.waD&&wa>=rel.waD, clDue=rel.cD&&cl>=rel.cD;
     if(!waDue&&!clDue) return;
-
-    if(camCovered.has(c.id)){
-      const cam=camCovered.get(c.id);
-      const camWhy=campaignTiming(cam);
-      t.push({id:'cam-'+cam.id+'-'+c.id, nm:c.name, act:cam.name+' — '+c.name,
-        why:camWhy,
-        urg:'soon', pri:(rel.p*10)+2, isCam:true, camId:cam.id, clientObj:c});
-      return;
-    }
     if(clDue){
       const ov=cl-rel.cD;
       t.push({id:'cl-'+c.id, nm:c.name, act:'Call '+c.name,
@@ -244,17 +253,6 @@ function mkTasks(){
       t.push({id:'wa-'+c.id, nm:c.name, act:'WhatsApp '+c.name,
         why:wa===9999?'Never contacted · '+c.relationship+' relationship':`${wa}d since last message · due every ${rel.waD}d`,
         urg:ov>7?'urgent':ov>=0?'soon':'normal', pri:rel.p*10+(c.deal?0:5)});
-    }
-  });
-
-  activeCams.forEach(cam=>{
-    const alreadyIn=t.some(x=>x.camId===cam.id);
-    if(!alreadyIn){
-      const cnt=getCampaignClients(cam).length;
-      const standaloneWhy=`${cnt} client${cnt===1?'':'s'} · ${campaignTiming(cam)}`;
-      t.push({id:'cam-'+cam.id, nm:'Campaign', act:cam.name,
-        why:standaloneWhy,
-        urg:'soon', pri:25, isCam:true, camId:cam.id, clientObj:null});
     }
   });
 
@@ -380,7 +378,7 @@ async function renderHomeDealTasks(){
   const list=document.getElementById('task-list');
   if(homeDealTasks===null){
     list.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
-    const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false});
+    const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false}).limit(5000);
     // Filter: only show tasks due today or overdue (no future tasks)
     const todayD=new Date(); todayD.setHours(0,0,0,0);
     homeDealTasks=(data||[]).filter(t=>{
@@ -1375,7 +1373,7 @@ function go(tab){
     const btn=document.getElementById('tab-'+t);
     if(btn) btn.classList.toggle('active',t===tab);
   });
-  if(tab==='home') rHome();
+  if(tab==='home'){ homeDealTasks=null; doneDealTasksToday=0; rHome(); }
   else if(tab==='deals') rDeals();
   else if(tab==='campaigns') rCampaigns();
   else if(tab==='clients') rClients();
