@@ -46,6 +46,7 @@ let editingDealId=null;
 let editingTaskId=null;
 let editRecId=null;
 let homeTab='deals', homeDealTasks=null;
+let HAS_BIRTHDAY_COL=false;
 let doneDealTasksToday = 0;
 let addingCampaignId=null;
 let ncam_imageData=null, ecam_imageData=null;
@@ -64,6 +65,11 @@ const abbr = n => n.replace(/[()]/g,'').split(/[\s/&,]+/).slice(0,2).map(w=>w[0]
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
 
 // ── LOAD DATA ─────────────────────────────────────────────────────
+async function checkBirthdayCol(){
+  const {error}=await SB.from('clients').select('birthday').limit(1);
+  if(!error) HAS_BIRTHDAY_COL=true;
+}
+
 async function loadAll(){
   const today = new Date().toISOString().split('T')[0];
 
@@ -76,6 +82,7 @@ async function loadAll(){
     SB.from('task_completions').select('task_key,reset_date'),
   ]);
 
+  await checkBirthdayCol();
   CLIENTS   = (cR.data||[]).map(normaliseClient);
   PARTNERS  = (pR.data||[]).map(normalisePartner);
   DEALS     = (dR.data||[]).map(normaliseDeal);
@@ -108,6 +115,7 @@ function normaliseClient(r){
     followUp: r.follow_up_date||null, deal: r.has_deal||false,
     relationship: r.relationship||'',
     proxyContact: r.proxy_contact||'',
+    birthday: r.birthday||null,
   };
 }
 function normalisePartner(r){
@@ -446,6 +454,23 @@ function mkTasks(){
     }
   });
 
+  // Birthday pass: clients with a birthday set and within 14 days
+  const today0=new Date(); today0.setHours(0,0,0,0);
+  CLIENTS.forEach(c=>{
+    if(!c.birthday) return;
+    const parts=c.birthday.split('-').map(Number);
+    if(parts.length!==2||!parts[0]||!parts[1]) return;
+    const [bm,bd]=parts;
+    let bday=new Date(today0.getFullYear(),bm-1,bd);
+    if(bday<today0) bday=new Date(today0.getFullYear()+1,bm-1,bd);
+    const diff=Math.floor((bday-today0)/86400000);
+    if(diff>14) return;
+    const taskId='bday-'+c.id;
+    const why=diff===0?'Birthday today!':diff===1?'Birthday tomorrow':`Birthday in ${diff} day${diff===1?'':'s'}`;
+    const urg=diff<=1?'urgent':diff<=5?'soon':'normal';
+    t.push({id:taskId,nm:c.name,act:`Birthday Wishes — ${c.name}`,why,urg,pri:diff,isCam:false,camId:null,clientObj:c,isBday:true});
+  });
+
   return t.sort((a,b)=>({urgent:0,soon:1,normal:2}[a.urg]||2)-({urgent:0,soon:1,normal:2}[b.urg]||2)||a.pri-b.pri);
 }
 
@@ -499,7 +524,8 @@ function rHome(){
       else if(cam.type==='Seasonal'||cam.type==='Triggered')     b=BUCKETS[3];
       else if(cam.type==='Follow-Up')                             b=BUCKETS[0];
       else                                                         b=BUCKETS[2];
-    } else { b=BUCKETS[0]; }
+    } else if(t.isBday) { b=BUCKETS[3]; } // Holidays & Birthdays
+    else { b=BUCKETS[0]; }
     b.tasks.push(t);
   });
 
@@ -1688,11 +1714,15 @@ async function saveClient(){
     notes:document.getElementById('nc-notes').value.trim(),
     sort_order: CLIENTS.length
   };
+  if(HAS_BIRTHDAY_COL){
+    const bv=document.getElementById('nc-bday').value;
+    row.birthday=bv?bv.slice(5):null; // store MM-DD only
+  }
   const {data,error}=await SB.from('clients').insert(row).select().single();
   if(error){ alert('Error saving: '+error.message); return; }
   CLIENTS.push(normaliseClient(data));
   closeModal('modal-client');
-  ['nc-name','nc-role','nc-city','nc-nat','nc-notes'].forEach(id=>document.getElementById(id).value='');
+  ['nc-name','nc-role','nc-city','nc-nat','nc-notes','nc-bday'].forEach(id=>document.getElementById(id).value='');
   document.querySelectorAll('#nc-int-chips .int-chip').forEach(el=>el.classList.remove('on'));
   rClients(); updateHomeStats(); showToast('Client added ✓');
 }
@@ -1713,6 +1743,8 @@ function openEditClient(id){
   document.getElementById('ec-notes').value=c.notes||'';
   document.getElementById('ec-proxy').value=c.proxyContact||'';
   document.getElementById('ec-proxy-row').style.display=c.relationship==='Proxy'?'':'none';
+  // Birthday: stored as MM-DD, date input needs full date — use year 2000 as placeholder
+  document.getElementById('ec-bday').value=c.birthday?'2000-'+c.birthday:'';
   openModal('modal-edit-client');
 }
 
@@ -1732,9 +1764,13 @@ async function saveEditClient(){
     interests:ints,
     notes:document.getElementById('ec-notes').value.trim(),
   };
+  if(HAS_BIRTHDAY_COL){
+    const bv=document.getElementById('ec-bday').value;
+    updates.birthday=bv?bv.slice(5):null; // store MM-DD only
+  }
   const {error}=await SB.from('clients').update(updates).eq('id',editClientId);
   if(error){ alert('Error: '+error.message); return; }
-  Object.assign(c, normaliseClient({...updates, id:editClientId, last_wa:c.wa, last_call:c.call, follow_up_date:c.followUp, has_deal:c.deal, proxy_contact:updates.proxy_contact}));
+  Object.assign(c, normaliseClient({...updates, id:editClientId, last_wa:c.wa, last_call:c.call, follow_up_date:c.followUp, has_deal:c.deal, proxy_contact:updates.proxy_contact, birthday:updates.birthday??c.birthday}));
   closeModal('modal-edit-client');
   openC(c);
   if(curTab==='clients') rClients();
