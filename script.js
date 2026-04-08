@@ -167,12 +167,14 @@ const EID_ADHA={
 
 function nextAnnualDate(cam, afterDate){
   const lname=(cam.name+' '+cam.occ).toLowerCase();
+  // Local-safe date → YYYY-MM-DD (avoids UTC offset stripping a day in BST)
+  const localStr=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 
   if(lname.includes('easter')){
     let year=afterDate.getFullYear();
     let e=easterDate(year);
     if(e<=afterDate) e=easterDate(year+1);
-    return e.toISOString().split('T')[0];
+    return localStr(e);
   }
 
   if(lname.includes('eid')){
@@ -189,23 +191,36 @@ function nextAnnualDate(cam, afterDate){
       const d=new Date(ds+'T00:00:00');
       if(d>afterDate) return ds;
     }
-    // Fallback: subtract ~10.875 days from current date per Islamic year shift
+    // Fallback: one Islamic lunar year forward (~354.37 days)
     const base=new Date(cam.date+'T00:00:00');
     base.setTime(base.getTime()+354.36707*86400000);
-    return base.toISOString().split('T')[0];
+    return localStr(base);
   }
 
   // Generic annual: add 1 year (JS handles Feb 29 → Feb 28 automatically)
   const d=new Date(cam.date+'T00:00:00');
   d.setFullYear(d.getFullYear()+1);
-  return d.toISOString().split('T')[0];
+  return localStr(d);
 }
+
+// Known annual holiday keywords — Events with these reset each year
+const ANNUAL_HOLIDAYS=['easter','eid','christmas','hanukkah','diwali','ramadan',
+  'holi','dussehra','thanksgiving','lunar new year','chinese new year',
+  'rosh hashanah','yom kippur','nowruz','vesak','mothers day','fathers day',
+  'new year'];
 
 async function checkAndResetAnnualCampaigns(){
   const today=new Date(); today.setHours(0,0,0,0);
-  const annual=['Seasonal','Triggered'];
+  const isAnnual=c=>{
+    if(['Seasonal','Triggered'].includes(c.type)) return true;
+    if(c.type==='Event'){
+      const l=(c.name+' '+c.occ).toLowerCase();
+      return ANNUAL_HOLIDAYS.some(k=>l.includes(k));
+    }
+    return false;
+  };
   const toReset=CAMPAIGNS.filter(c=>{
-    if(!annual.includes(c.type)) return false;
+    if(!isAnnual(c)) return false;
     if(!c.date||c.date==='TBC'||c.date==='Ongoing') return false;
     const d=new Date(c.date+'T00:00:00'); d.setHours(0,0,0,0);
     return Math.floor((d-today)/86400000)<=-2; // 2+ days past = grace period elapsed
