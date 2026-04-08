@@ -221,13 +221,38 @@ function isHolidayCampaign(c){
   return ANNUAL_HOLIDAYS.some(k=>l.includes(k));
 }
 
-// Auto-upgrade any holiday campaign that isn't already typed Seasonal → fix in DB + locally
+function isValidDateStr(str){
+  if(!str||str==='TBC'||str==='Ongoing') return true;
+  const d=new Date(str+'T00:00:00');
+  return !isNaN(d.getTime());
+}
+
+// Format a YYYY-MM-DD date string as "5 April 2026"
+function fmtCamDate(str){
+  if(!str||str==='TBC'||str==='Ongoing') return str||'';
+  try{
+    const d=new Date(str+'T00:00:00');
+    if(isNaN(d.getTime())) return str;
+    return d.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  }catch(e){ return str; }
+}
+
+// Auto-upgrade holiday campaigns to Seasonal and repair any malformed dates
 async function ensureHolidaysAreSeasonal(){
-  const toFix=CAMPAIGNS.filter(c=>c.type!=='Seasonal'&&isHolidayCampaign(c));
+  const today=new Date(); today.setHours(0,0,0,0);
+  const toFix=CAMPAIGNS.filter(c=>isHolidayCampaign(c)&&(c.type!=='Seasonal'||!isValidDateStr(c.date)));
   if(!toFix.length) return;
-  const ids=toFix.map(c=>c.id);
-  await SB.from('campaigns').update({type:'Seasonal'}).in('id',ids);
-  toFix.forEach(c=>{ c.type='Seasonal'; });
+  for(const c of toFix){
+    const updates={};
+    if(c.type!=='Seasonal') updates.type='Seasonal';
+    if(!isValidDateStr(c.date)){
+      // Date is malformed (e.g. "2026z") — calculate the correct upcoming date
+      updates.date=nextAnnualDate(c,today);
+    }
+    await SB.from('campaigns').update(updates).eq('id',c.id);
+    if(updates.type) c.type=updates.type;
+    if(updates.date) c.date=updates.date;
+  }
 }
 
 // Campaigns that should always exist — created automatically if missing
@@ -775,7 +800,7 @@ function rCampaigns(){
       </div>
       <div class="camc-body">${cam.notes||''}</div>
       <div class="camc-foot">
-        ${cam.date?`<span class="pill p-gh">${cam.date}</span>`:''}
+        ${cam.date?`<span class="pill p-gh">${fmtCamDate(cam.date)}</span>`:''}
         ${cam.seg?`<span class="pill p-gold">Seg: ${cam.seg}</span>`:''}
         <span class="pill p-grn">${cnt} contacts</span>
       </div>`;
@@ -840,7 +865,7 @@ function renderCampaignProfile(cam){
         <div class="prof-av sq" style="background:rgba(42,95,168,0.09);border-color:rgba(42,95,168,0.22);color:var(--blue)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>
         </div>
-        <div><div class="prof-name">${cam.name}</div><div class="prof-role-l">${cam.type} · ${cam.date}</div></div>
+        <div><div class="prof-name">${cam.name}</div><div class="prof-role-l">${cam.type} · ${fmtCamDate(cam.date)}</div></div>
       </div>
       <div class="prof-pills">
         <span class="pill ${CC[cam.type]||'p-gh'}">${cam.type}</span>
