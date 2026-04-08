@@ -84,6 +84,8 @@ async function loadAll(){
 
   // Ensure all holiday/wishes campaigns are typed Seasonal (fixes any misclassified Events)
   await ensureHolidaysAreSeasonal();
+  // Seed any missing standard annual campaigns (e.g. Eid al-Adha)
+  await seedAnnualCampaigns();
   // Reset annual campaigns whose grace period (1 day after date) has elapsed
   await checkAndResetAnnualCampaigns();
 
@@ -226,6 +228,29 @@ async function ensureHolidaysAreSeasonal(){
   const ids=toFix.map(c=>c.id);
   await SB.from('campaigns').update({type:'Seasonal'}).in('id',ids);
   toFix.forEach(c=>{ c.type='Seasonal'; });
+}
+
+// Campaigns that should always exist — created automatically if missing
+const SEED_CAMPAIGNS=[
+  {
+    name:'Eid al-Adha Mubarak',
+    type:'Seasonal',
+    segment:'All',
+    occasion:'Muslim',
+    date: EID_ADHA[new Date().getFullYear()]||EID_ADHA[new Date().getFullYear()+1]||'TBC',
+    notes:'Annual Eid al-Adha wishes — send to all Muslim clients and contacts.',
+    template:'Eid al-Adha Mubarak! Wishing you and your family a blessed and joyful celebration.',
+  },
+];
+
+async function seedAnnualCampaigns(){
+  for(const seed of SEED_CAMPAIGNS){
+    const exists=CAMPAIGNS.some(c=>c.name.toLowerCase()===seed.name.toLowerCase());
+    if(exists) continue;
+    const sort_order=CAMPAIGNS.length;
+    const {data,error}=await SB.from('campaigns').insert({...seed,sort_order}).select().single();
+    if(!error&&data) CAMPAIGNS.push(normaliseCampaign(data));
+  }
 }
 
 async function checkAndResetAnnualCampaigns(){
