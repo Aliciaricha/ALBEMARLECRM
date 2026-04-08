@@ -82,6 +82,8 @@ async function loadAll(){
   CAMPAIGNS = (camR.data||[]).map(normaliseCampaign);
   RECS      = recR.data||[];
 
+  // Ensure all holiday/wishes campaigns are typed Seasonal (fixes any misclassified Events)
+  await ensureHolidaysAreSeasonal();
   // Reset annual campaigns whose grace period (1 day after date) has elapsed
   await checkAndResetAnnualCampaigns();
 
@@ -203,24 +205,33 @@ function nextAnnualDate(cam, afterDate){
   return localStr(d);
 }
 
-// Known annual holiday keywords — Events with these reset each year
-const ANNUAL_HOLIDAYS=['easter','eid','christmas','hanukkah','diwali','ramadan',
-  'holi','dussehra','thanksgiving','lunar new year','chinese new year',
-  'rosh hashanah','yom kippur','nowruz','vesak','mothers day','fathers day',
-  'new year'];
+// Keywords that identify an annual holiday/wishes campaign
+const ANNUAL_HOLIDAYS=[
+  'easter','eid','christmas','hanukkah','diwali','ramadan','holi','dussehra',
+  'thanksgiving','lunar new year','chinese new year','rosh hashanah','yom kippur',
+  'nowruz','vesak','mothers day','fathers day','new year','eid al-fitr',
+  'eid al-adha','eid mubarak','merry christmas','happy holidays','holiday wishes',
+  'seasonal wishes','birthday wishes','diwali wishes','ramadan kareem',
+];
+
+function isHolidayCampaign(c){
+  const l=(c.name+' '+c.occ).toLowerCase();
+  return ANNUAL_HOLIDAYS.some(k=>l.includes(k));
+}
+
+// Auto-upgrade any holiday campaign that isn't already typed Seasonal → fix in DB + locally
+async function ensureHolidaysAreSeasonal(){
+  const toFix=CAMPAIGNS.filter(c=>c.type!=='Seasonal'&&isHolidayCampaign(c));
+  if(!toFix.length) return;
+  const ids=toFix.map(c=>c.id);
+  await SB.from('campaigns').update({type:'Seasonal'}).in('id',ids);
+  toFix.forEach(c=>{ c.type='Seasonal'; });
+}
 
 async function checkAndResetAnnualCampaigns(){
   const today=new Date(); today.setHours(0,0,0,0);
-  const isAnnual=c=>{
-    if(['Seasonal','Triggered'].includes(c.type)) return true;
-    if(c.type==='Event'){
-      const l=(c.name+' '+c.occ).toLowerCase();
-      return ANNUAL_HOLIDAYS.some(k=>l.includes(k));
-    }
-    return false;
-  };
   const toReset=CAMPAIGNS.filter(c=>{
-    if(!isAnnual(c)) return false;
+    if(!['Seasonal','Triggered'].includes(c.type)) return false;
     if(!c.date||c.date==='TBC'||c.date==='Ongoing') return false;
     const d=new Date(c.date+'T00:00:00'); d.setHours(0,0,0,0);
     return Math.floor((d-today)/86400000)<=-2; // 2+ days past = grace period elapsed
@@ -230,7 +241,7 @@ async function checkAndResetAnnualCampaigns(){
     const newDate=nextAnnualDate(cam,today);
     await SB.from('campaigns').update({date:newDate}).eq('id',cam.id);
     await SB.from('campaign_completions').delete().eq('campaign_id',cam.id);
-    cam.date=newDate; // update local state
+    cam.date=newDate;
   }
   if(toReset.length) showToast(`${toReset.length} campaign${toReset.length>1?'s':''} reset for next year`);
 }
