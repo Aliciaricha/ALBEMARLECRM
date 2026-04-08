@@ -168,6 +168,13 @@ const EID_ADHA={
   2030:'2030-04-13',2031:'2031-04-02',2032:'2032-03-22',
   2033:'2033-03-11',2034:'2034-03-01',2035:'2035-02-18',
 };
+// Diwali (Deepavali) approximate dates
+const DIWALI={
+  2024:'2024-11-01',2025:'2025-10-20',2026:'2026-11-08',
+  2027:'2027-10-29',2028:'2028-10-17',2029:'2029-11-05',
+  2030:'2030-10-25',2031:'2031-11-13',2032:'2032-11-01',
+  2033:'2033-10-22',2034:'2034-11-10',2035:'2035-10-30',
+};
 
 function nextAnnualDate(cam, afterDate){
   const lname=(cam.name+' '+cam.occ).toLowerCase();
@@ -186,23 +193,43 @@ function nextAnnualDate(cam, afterDate){
     if(lname.includes('adha'))      table=EID_ADHA;
     else if(lname.includes('fitr')) table=EID_FITR;
     else {
-      // Guess from current campaign date: May–Aug → Adha, else Fitr
+      // Guess from current campaign date month if valid, else default to Fitr
       const cm=new Date(cam.date+'T00:00:00').getMonth()+1;
-      table=(cm>=5&&cm<=8)?EID_ADHA:EID_FITR;
+      table=(!isNaN(cm)&&cm>=5&&cm<=8)?EID_ADHA:EID_FITR;
     }
     for(let y=afterDate.getFullYear();y<=afterDate.getFullYear()+3;y++){
       const ds=table[y]; if(!ds) continue;
       const d=new Date(ds+'T00:00:00');
       if(d>afterDate) return ds;
     }
-    // Fallback: one Islamic lunar year forward (~354.37 days)
+    // Fallback: one Islamic lunar year forward — only if cam.date is valid
     const base=new Date(cam.date+'T00:00:00');
-    base.setTime(base.getTime()+354.36707*86400000);
-    return localStr(base);
+    if(!isNaN(base.getTime())){
+      base.setTime(base.getTime()+354.36707*86400000);
+      return localStr(base);
+    }
+    return EID_FITR[afterDate.getFullYear()+1]||'TBC';
   }
 
-  // Generic annual: add 1 year (JS handles Feb 29 → Feb 28 automatically)
+  if(lname.includes('christmas')||lname.includes('xmas')){
+    let year=afterDate.getFullYear();
+    let d=new Date(year,11,25);
+    if(d<=afterDate) d=new Date(year+1,11,25);
+    return localStr(d);
+  }
+
+  if(lname.includes('diwali')||lname.includes('deepavali')){
+    for(let y=afterDate.getFullYear();y<=afterDate.getFullYear()+3;y++){
+      const ds=DIWALI[y]; if(!ds) continue;
+      const d=new Date(ds+'T00:00:00');
+      if(d>afterDate) return ds;
+    }
+    return DIWALI[afterDate.getFullYear()+1]||'TBC';
+  }
+
+  // Generic annual: add 1 year — requires a valid cam.date
   const d=new Date(cam.date+'T00:00:00');
+  if(isNaN(d.getTime())) return 'TBC'; // can't compute next date from invalid input
   d.setFullYear(d.getFullYear()+1);
   return localStr(d);
 }
@@ -233,7 +260,7 @@ function fmtCamDate(str){
   try{
     const d=new Date(str+'T00:00:00');
     if(isNaN(d.getTime())) return str;
-    return d.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+    return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
   }catch(e){ return str; }
 }
 
