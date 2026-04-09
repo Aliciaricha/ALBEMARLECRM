@@ -918,13 +918,30 @@ function rClients(){
     if(lbl) lbl.textContent=pills.length?`Filter (${pills.length})`:'Filter';
   }
 
+  const NW_ORDER=['Billionaire','Centimillionaire','HNWI'];
+  list.sort((a,b)=>{
+    const ai=NW_ORDER.includes(a.nw)?NW_ORDER.indexOf(a.nw):99;
+    const bi=NW_ORDER.includes(b.nw)?NW_ORDER.indexOf(b.nw):99;
+    if(ai!==bi) return ai-bi;
+    return (a.name||'').localeCompare(b.name||'');
+  });
+
   const el=document.getElementById('cli-list'); el.innerHTML='';
-  list.forEach((c,i)=>{
+  const showNwHeaders=!q&&!clientFilters.nw;
+  let lastNw=null;
+  let idx=0;
+  list.forEach(c=>{
+    if(showNwHeaders&&c.nw!==lastNw){
+      lastNw=c.nw;
+      const h=document.createElement('div');
+      h.className='rec-cat-header'; h.textContent=c.nw;
+      el.appendChild(h);
+    }
     const rel=REL_CADENCES[c.relationship];
     const wa=daysSince(c.wa), cl=daysSince(c.call);
     const clOv=rel?.cD&&cl>=rel.cD, waOv=rel?.waD&&wa>=rel.waD;
     const div=document.createElement('div');
-    div.className='pc gc a'; div.style.animationDelay=(i*0.04)+'s';
+    div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
     div.onclick=()=>openC(c);
     const cardTag=c.deal?'<span class="pill p-gold" style="font-size:9px;margin-top:4px;align-self:flex-start">Deal</span>':(c.int||[]).includes('High Potential')?'<span class="pill" style="font-size:9px;margin-top:4px;align-self:flex-start;background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':'';
     div.innerHTML=`<div class="pc-av">${ini(c.name)}</div>
@@ -1227,11 +1244,24 @@ async function logMeeting(c){
 
 // ── PARTNERS ──────────────────────────────────────────────────────
 function rPartners(){
-  let list=cF==='All'?PARTNERS:PARTNERS.filter(p=>p.cat===cF);
+  let list=cF==='All'?[...PARTNERS]:[...PARTNERS.filter(p=>p.cat===cF)];
+  list.sort((a,b)=>{
+    if(a.cat!==b.cat) return (a.cat||'').localeCompare(b.cat||'');
+    return (a.name||'').localeCompare(b.name||'');
+  });
   const el=document.getElementById('par-list'); el.innerHTML='';
-  list.forEach((p,i)=>{
+  const showCatHeaders=cF==='All';
+  let lastCat=null;
+  let idx=0;
+  list.forEach(p=>{
+    if(showCatHeaders&&p.cat!==lastCat){
+      lastCat=p.cat;
+      const h=document.createElement('div');
+      h.className='rec-cat-header'; h.textContent=p.cat;
+      el.appendChild(h);
+    }
     const div=document.createElement('div');
-    div.className='pc gc a'; div.style.animationDelay=(i*0.04)+'s';
+    div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
     div.onclick=()=>openP(p);
     div.innerHTML=`<div class="pc-av" style="border-radius:14px;font-size:13px">${abbr(p.name)}</div>
       <div class="pc-info"><div class="pc-name">${p.name}</div><div class="pc-sub">${p.contact}${p.role?' · '+p.role:''}</div></div>
