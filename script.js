@@ -1238,7 +1238,6 @@ function rPartners(){
       <div class="pc-r">
         ${p.fee?`<span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--gold);font-weight:300">${p.fee}</span>`:''}
         <span class="pill p-gh" style="font-size:9px">${p.cat}</span>
-        ${p.isC?'<span class="pill p-blu" style="font-size:9px">Client</span>':''}
       </div>`;
     el.appendChild(div);
   });
