@@ -172,6 +172,66 @@
     <div class="prof-screen" id="ps-client"><div class="prof-wrap" id="ps-client-body"></div></div>
     <div class="prof-screen" id="ps-partner"><div class="prof-wrap" id="ps-partner-body"></div></div>
     <div class="prof-screen" id="ps-campaign"><div class="prof-wrap" id="ps-campaign-body"></div></div>
+    <div class="prof-screen" id="ps-edit-client" style="z-index:60">
+      <div class="prof-wrap">
+        <div class="prof-back-row">
+          <div class="prof-back" onclick="closeEditPanel('ps-edit-client')">
+            <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 1L1 7l6 6"/></svg><span>Client</span>
+          </div>
+        </div>
+        <div class="modal-title" style="padding:8px 0 10px">Edit Client</div>
+        <div class="form-body">
+          <div class="form-row">
+            <div class="form-field"><label>Full Name</label><input type="text" id="ec-name"></div>
+            <div class="form-field"><label>Position / Role</label><input type="text" id="ec-role"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-field"><label>City</label><input type="text" id="ec-city"></div>
+            <div class="form-field"><label>Tier</label>
+              <select id="ec-tier"><option>Top</option><option>Active</option><option>Warm</option><option>Sleeper</option></select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field"><label>Net Worth</label>
+              <select id="ec-nw"><option>Billionaire</option><option>Centimillionaire</option><option>HNWI</option></select>
+            </div>
+            <div class="form-field"><label>Nationality</label><input type="text" id="ec-nat"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-field"><label>Religion</label>
+              <select id="ec-rel"><option>Unknown</option><option>Muslim</option><option>Christian</option><option>Hindu</option><option>Jewish</option><option>Other</option></select>
+            </div>
+            <div class="form-field"><label>Relationship</label>
+              <select id="ec-rel2" onchange="document.getElementById('ec-proxy-row').style.display=this.value==='Proxy'?'':'none'"><option>Personal</option><option>General</option><option>Proxy</option><option>Archive</option></select>
+            </div>
+          </div>
+          <div class="form-field" id="ec-proxy-row" style="display:none">
+            <label>Proxy Contact Name</label>
+            <input type="text" id="ec-proxy" placeholder="e.g. Hassan Al-Farsi (assistant)">
+          </div>
+          <div class="form-field"><label>Interests</label>
+            <div class="int-chips" id="ec-int-chips">
+              <div class="int-chip" onclick="this.classList.toggle('on')">Real Estate</div>
+              <div class="int-chip" onclick="this.classList.toggle('on')">Dior</div>
+              <div class="int-chip" onclick="this.classList.toggle('on')">Luxury</div>
+              <div class="int-chip" onclick="this.classList.toggle('on')">Fine Jewellery</div>
+              <div class="int-chip" onclick="this.classList.toggle('on')">The Luxury Collective</div>
+              <div class="int-chip" onclick="this.classList.toggle('on')">Connector</div>
+            </div>
+          </div>
+          <div class="form-field"><label>Tags</label>
+            <div class="int-chips" id="ec-tag-chips">
+              <div class="int-chip" onclick="this.classList.toggle('on')">High Potential</div>
+            </div>
+          </div>
+          <div class="form-field"><label>Notes</label><textarea id="ec-notes"></textarea></div>
+        </div>
+        <div class="form-footer">
+          <button class="form-submit" onclick="saveEditClient()">Save Changes</button>
+          <div class="form-cancel" onclick="closeEditPanel('ps-edit-client')">Cancel</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- TAB BAR -->
@@ -293,62 +353,6 @@
 </div>
 
 <!-- EDIT CLIENT -->
-<div class="modal-overlay" id="modal-edit-client" onclick="closeModalOut(event,'modal-edit-client')">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-title">Edit Client</div>
-    <div class="form-body">
-      <div class="form-row">
-        <div class="form-field"><label>Full Name</label><input type="text" id="ec-name"></div>
-        <div class="form-field"><label>Position / Role</label><input type="text" id="ec-role"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-field"><label>City</label><input type="text" id="ec-city"></div>
-        <div class="form-field"><label>Tier</label>
-          <select id="ec-tier"><option>Top</option><option>Active</option><option>Warm</option><option>Sleeper</option></select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-field"><label>Net Worth</label>
-          <select id="ec-nw"><option>Billionaire</option><option>Centimillionaire</option><option>HNWI</option></select>
-        </div>
-        <div class="form-field"><label>Nationality</label><input type="text" id="ec-nat"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-field"><label>Religion</label>
-          <select id="ec-rel"><option>Unknown</option><option>Muslim</option><option>Christian</option><option>Hindu</option><option>Jewish</option><option>Other</option></select>
-        </div>
-        <div class="form-field"><label>Relationship</label>
-          <select id="ec-rel2" onchange="document.getElementById('ec-proxy-row').style.display=this.value==='Proxy'?'':'none'"><option>Personal</option><option>General</option><option>Proxy</option><option>Archive</option></select>
-        </div>
-      </div>
-      <div class="form-field" id="ec-proxy-row" style="display:none">
-        <label>Proxy Contact Name</label>
-        <input type="text" id="ec-proxy" placeholder="e.g. Hassan Al-Farsi (assistant)">
-      </div>
-      <div class="form-field"><label>Interests</label>
-        <div class="int-chips" id="ec-int-chips">
-          <div class="int-chip" onclick="this.classList.toggle('on')">Real Estate</div>
-          <div class="int-chip" onclick="this.classList.toggle('on')">Dior</div>
-          <div class="int-chip" onclick="this.classList.toggle('on')">Luxury</div>
-          <div class="int-chip" onclick="this.classList.toggle('on')">Fine Jewellery</div>
-          <div class="int-chip" onclick="this.classList.toggle('on')">The Luxury Collective</div>
-          <div class="int-chip" onclick="this.classList.toggle('on')">Connector</div>
-        </div>
-      </div>
-      <div class="form-field"><label>Tags</label>
-        <div class="int-chips" id="ec-tag-chips">
-          <div class="int-chip" onclick="this.classList.toggle('on')">High Potential</div>
-        </div>
-      </div>
-      <div class="form-field"><label>Notes</label><textarea id="ec-notes"></textarea></div>
-    </div>
-    <div class="form-footer">
-      <button class="form-submit" onclick="saveEditClient()">Save Changes</button>
-      <div class="form-cancel" onclick="closeModal('modal-edit-client')">Cancel</div>
-    </div>
-  </div>
-</div>
 
 <!-- NEW PARTNER -->
 <div class="modal-overlay" id="modal-partner" onclick="closeModalOut(event,'modal-partner')">
