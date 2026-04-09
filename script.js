@@ -921,16 +921,13 @@ function rClients(){
     const div=document.createElement('div');
     div.className='pc gc a'; div.style.animationDelay=(i*0.04)+'s';
     div.onclick=()=>openC(c);
-    div.innerHTML=`<div class="pc-av">${ini(c.name)}${c.deal?'<div class="dot"></div>':''}</div>
+    const cardTag=c.deal?'<span class="pill p-gold" style="font-size:9px;margin-top:4px;align-self:flex-start">Deal</span>':(c.int||[]).includes('High Potential')?'<span class="pill" style="font-size:9px;margin-top:4px;align-self:flex-start;background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':'';
+    div.innerHTML=`<div class="pc-av">${ini(c.name)}</div>
   <div class="pc-info">
     <div class="pc-name">${c.name}</div>
     <div class="pc-sub">${c.role||c.city||''}</div>
+    ${cardTag}
     ${c.relationship==='Proxy'&&c.proxyContact?`<div class="pc-proxy">via ${c.proxyContact}</div>`:''}
-  </div>
-  <div class="pc-r">
-    ${c.relationship?`<span class="pill p-gh" style="font-size:9px">${c.relationship}</span>`:''}
-    ${(c.int||[]).includes('High Potential')?'<span class="pill" style="font-size:9px;background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':''}
-    ${clOv?'<span class="pill p-red" style="font-size:9px">Call due</span>':waOv?'<span class="pill p-amb" style="font-size:9px">Follow up</span>':''}
   </div>`;
     el.appendChild(div);
   });
