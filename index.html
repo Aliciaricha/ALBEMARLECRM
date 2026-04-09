@@ -268,10 +268,6 @@
         <label>Proxy Contact Name</label>
         <input type="text" id="nc-proxy" placeholder="e.g. Hassan Al-Farsi (assistant)">
       </div>
-      <div class="form-field">
-        <label>Birthday <span style="font-size:10px;font-weight:400;color:var(--t3);margin-left:4px;">Year not required</span></label>
-        <input type="date" id="nc-bday">
-      </div>
       <div class="form-field"><label>Interests</label>
         <div class="int-chips" id="nc-int-chips">
           <div class="int-chip" onclick="this.classList.toggle('on')">Real Estate</div>
@@ -290,6 +286,11 @@
           <div class="int-chip" onclick="this.classList.toggle('on')">Sports</div>
           <div class="int-chip" onclick="this.classList.toggle('on')">Dior</div>
           <div class="int-chip" onclick="this.classList.toggle('on')">The Luxury Collective</div>
+        </div>
+      </div>
+      <div class="form-field"><label>Tags</label>
+        <div class="int-chips" id="nc-tag-chips">
+          <div class="int-chip" onclick="this.classList.toggle('on')">High Potential</div>
         </div>
       </div>
       <div class="form-field"><label>Notes</label><textarea id="nc-notes" placeholder="Key context about this client…"></textarea></div>
@@ -335,10 +336,6 @@
         <label>Proxy Contact Name</label>
         <input type="text" id="ec-proxy" placeholder="e.g. Hassan Al-Farsi (assistant)">
       </div>
-      <div class="form-field">
-        <label>Birthday <span style="font-size:10px;font-weight:400;color:var(--t3);margin-left:4px;">Year not required</span></label>
-        <input type="date" id="ec-bday">
-      </div>
       <div class="form-field"><label>Interests</label>
         <div class="int-chips" id="ec-int-chips">
           <div class="int-chip" onclick="this.classList.toggle('on')">Real Estate</div>
@@ -357,6 +354,11 @@
           <div class="int-chip" onclick="this.classList.toggle('on')">Sports</div>
           <div class="int-chip" onclick="this.classList.toggle('on')">Dior</div>
           <div class="int-chip" onclick="this.classList.toggle('on')">The Luxury Collective</div>
+        </div>
+      </div>
+      <div class="form-field"><label>Tags</label>
+        <div class="int-chips" id="ec-tag-chips">
+          <div class="int-chip" onclick="this.classList.toggle('on')">High Potential</div>
         </div>
       </div>
       <div class="form-field"><label>Notes</label><textarea id="ec-notes"></textarea></div>
@@ -441,9 +443,9 @@
       <div class="form-field"><label>Campaign Title</label><input type="text" id="ncam-name" placeholder="Campaign name"></div>
       <div class="form-row">
         <div class="form-field"><label>Type</label>
-          <select id="ncam-type" onchange="document.getElementById('ncam-date-row').style.display=this.value==='Seasonal'?'none':'block'"><option>Follow-Up</option><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
+          <select id="ncam-type"><option>Follow-Up</option><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
         </div>
-        <div class="form-field" id="ncam-date-row"><label>Date</label><input type="date" id="ncam-date"></div>
+        <div class="form-field"><label>Date</label><input type="text" id="ncam-date" placeholder="e.g. 20 Apr 2026"></div>
       </div>
       <div class="form-field"><label>Segment</label>
         <div class="seg-chips" id="seg-chips">
@@ -493,7 +495,7 @@
         <div class="form-field"><label>Type</label>
           <select id="ecam-type"><option>Follow-Up</option><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
         </div>
-        <div class="form-field" id="ecam-date-row"><label>Date</label><input type="date" id="ecam-date"><div id="ecam-date-note" style="display:none;font-size:11px;color:var(--t3);margin-top:4px;">Date is managed automatically for Seasonal campaigns.</div></div>
+        <div class="form-field"><label>Date</label><input type="text" id="ecam-date"></div>
       </div>
       <div class="form-field"><label>Segment</label>
         <div class="seg-chips" id="edit-seg-chips">
@@ -705,6 +707,13 @@
         <div class="filter-chips-wrap" id="filter-interests-chips"></div>
       </div>
 
+      <div class="filter-section">
+        <div class="filter-sec-lbl">Tags</div>
+        <div class="filter-chips-wrap">
+          <div class="fchip" data-group="tag" data-val="High Potential" onclick="toggleFChip(this)">High Potential</div>
+        </div>
+      </div>
+
     </div>
     <div class="form-footer" style="padding-top:6px">
       <button class="form-submit" onclick="applyClientFilters()">Apply Filters</button>
@@ -715,6 +724,5 @@
 
 
 <script src="script.js" defer></script>
-<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 </body>
 </html>
