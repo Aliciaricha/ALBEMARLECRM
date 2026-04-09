@@ -111,6 +111,11 @@ function normalisePartner(r){
     wa: r.last_wa||null, call: r.last_call||null,
   };
 }
+function parsePct(str){
+  if(!str) return null;
+  const m=String(str).match(/(\d+(?:\.\d+)?)/);
+  return m?parseFloat(m[1]):null;
+}
 function normaliseDeal(r){
   return {
     id: r.id, clientId: r.client_id, pt: r.partner||'',
@@ -1255,8 +1260,8 @@ function openP(p){
       </div>
       <div class="prof-pills">
         <span class="pill p-gh">${p.tier}</span>
-        ${p.fee?`<span class="pill p-gold">${p.fee} intro fee</span>`:''}
-        ${p.bizFee?`<span class="pill p-gh">${p.bizFee} biz fee</span>`:''}
+        ${p.fee?`<span class="pill p-gold">${p.fee} ref. fee</span>`:''}
+        ${p.bizFee?`<span class="pill p-gh">${p.bizFee} bus. fee</span>`:''}
         ${p.isC?'<span class="pill p-blu">Also a Client</span>':''}
       </div>
     </div>
@@ -1270,9 +1275,10 @@ function openP(p){
     </div>
     <div class="prof-sec">
       <div class="sec-lbl">Partnership Terms</div>
-      ${p.fee?`<div class="sec-row"><div class="sec-k">Intro Fee</div><div class="sec-v">${p.fee}</div></div>`:''}
+      ${p.fee?`<div class="sec-row"><div class="sec-k">Referral Fee</div><div class="sec-v">${p.fee}</div></div>`:''}
       ${p.bizFee?`<div class="sec-row"><div class="sec-k">Business Fee</div><div class="sec-v">${p.bizFee}</div></div>`:''}
       ${p.spend?`<div class="sec-row"><div class="sec-k">Client Spend Threshold</div><div class="sec-v">${fm(p.spend)}</div></div>`:''}
+      ${(()=>{const pDeals=DEALS.filter(d=>d.pt===p.name);if(!pDeals.length||!parsePct(p.fee)) return '';const totalComm=pDeals.reduce((s,d)=>s+(d.v*(d.pct/100)),0);const effComm=totalComm*(parsePct(p.fee)/100);return `<div class="sec-row"><div class="sec-k">Effective Commission</div><div class="sec-v" style="color:var(--gold);font-weight:700">${fm(effComm)}</div></div><div class="sec-row"><div class="sec-k">From Deals</div><div class="sec-v">${pDeals.length} deal${pDeals.length!==1?'s':''} · ${fm(totalComm)} total comm.</div></div>`;})()}
     </div>
     ${p.notes?`<div class="prof-sec"><div class="sec-lbl">Notes</div><div class="sec-notes">${p.notes}</div></div>`:''}
     <div style="height:36px"></div>`;
@@ -1524,6 +1530,7 @@ async function savePartner(){
     position:document.getElementById('np-role').value.trim(),
     country:document.getElementById('np-country').value.trim(),
     introduction_fee:document.getElementById('np-fee').value.trim(),
+    business_fees:document.getElementById('np-bizfee').value.trim(),
     notes:document.getElementById('np-notes').value.trim(),
     sort_order:PARTNERS.length
   };
@@ -1531,7 +1538,7 @@ async function savePartner(){
   if(error){ alert('Error: '+error.message); return; }
   PARTNERS.push(normalisePartner(data));
   closeModal('modal-partner');
-  ['np-name','np-contact','np-role','np-fee','np-country','np-notes'].forEach(id=>document.getElementById(id).value='');
+  ['np-name','np-contact','np-role','np-fee','np-bizfee','np-country','np-notes'].forEach(id=>document.getElementById(id).value='');
   rPartners(); updateHomeStats(); showToast('Partner added ✓');
 }
 
@@ -1545,6 +1552,7 @@ function openEditPartner(id){
   document.getElementById('ep-tier').value=p.tier;
   document.getElementById('ep-country').value=p.country||'';
   document.getElementById('ep-fee').value=p.fee||'';
+  document.getElementById('ep-bizfee').value=p.bizFee||'';
   document.getElementById('ep-notes').value=p.notes||'';
   openModal('modal-edit-partner');
 }
@@ -1559,11 +1567,12 @@ async function saveEditPartner(){
     crm_tier:document.getElementById('ep-tier').value,
     country:document.getElementById('ep-country').value.trim(),
     introduction_fee:document.getElementById('ep-fee').value.trim(),
+    business_fees:document.getElementById('ep-bizfee').value.trim(),
     notes:document.getElementById('ep-notes').value.trim(),
   };
   const {error}=await SB.from('partners').update(updates).eq('id',editPartnerId);
   if(error){ alert('Error: '+error.message); return; }
-  Object.assign(p, normalisePartner({...updates, id:editPartnerId, last_wa:p.wa, last_call:p.call, business_fees:p.bizFee, client_spend:p.spend, is_client:p.isC}));
+  Object.assign(p, normalisePartner({...updates, id:editPartnerId, last_wa:p.wa, last_call:p.call, client_spend:p.spend, is_client:p.isC}));
   closeModal('modal-edit-partner');
   openP(p); if(curTab==='partners') rPartners();
   showToast('Partner updated ✓');
