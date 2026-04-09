@@ -601,37 +601,45 @@ async function renderDealTasksTimeline(){
   const today=new Date(); today.setHours(0,0,0,0);
   const buckets=new Map();
   tasks.forEach(t=>{
-    if(!t.due_date){ const k='No Date'; if(!buckets.has(k)) buckets.set(k,[]); buckets.get(k).push(t); return; }
+    if(!t.due_date){ const k='No Date'; if(!buckets.has(k)) buckets.set(k,{label:'No Date',color:'',items:[]}); buckets.get(k).items.push(t); return; }
     const d=new Date(t.due_date); d.setHours(0,0,0,0);
     const diff=Math.round((d-today)/86400000);
-    let label;
-    if(diff<0) label='Overdue';
-    else if(diff===0) label='Today';
-    else if(diff===1) label='Tomorrow';
-    else label=d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
-    if(!buckets.has(label)) buckets.set(label,[]);
-    buckets.get(label).push(t);
+    let label,color='';
+    if(diff<0){label='Overdue';color='var(--red)';}
+    else if(diff===0){label='Today';color='var(--gold)';}
+    else if(diff===1){label='Tomorrow';}
+    else label=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+    if(!buckets.has(label)) buckets.set(label,{label,color,items:[]});
+    buckets.get(label).items.push(t);
   });
   wrap.innerHTML='';
-  buckets.forEach((items,label)=>{
+  buckets.forEach(({label,color,items})=>{
     const hdr=document.createElement('div');
     hdr.className='rec-cat-header';
-    hdr.style.cssText+=(label==='Overdue'?';color:var(--red)':label==='Today'?';color:var(--gold)':'');
+    if(color) hdr.style.color=color;
     hdr.textContent=label;
     wrap.appendChild(hdr);
-    items.forEach((t,i)=>{
+    const card=document.createElement('div');
+    card.className='acts';
+    items.forEach(t=>{
       const deal=DEALS.find(d=>d.id===t.deal_id);
       const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
-      const sub=[client?.name,deal?.pt,deal?.cat].filter(Boolean).join(' · ');
-      const el=document.createElement('div');
-      el.className='tc normal a'; el.style.animationDelay=(i*0.04)+'s';
-      el.innerHTML=`<div class="tc-av deal-tc-av"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-        <div class="tc-body" style="cursor:pointer"><div class="tc-act">${t.title}</div><div class="tc-why">${sub}</div></div>
-        <div class="chk"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
-      el.querySelector('.tc-body').onclick=(ev)=>{ev.stopPropagation();openRescheduleTask(t.id,t.title,t.due_date);};
-      el.querySelector('.chk').onclick=(ev)=>{ev.stopPropagation();tickDealTaskTimeline(t.id,el);};
-      wrap.appendChild(el);
+      const sub=[client?.name,deal?.pt].filter(Boolean).join(' · ');
+      const row=document.createElement('div');
+      row.className='act';
+      row.style.cssText='padding:10px 14px;gap:10px;';
+      row.innerHTML=`
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.title}</div>
+          ${sub?`<div style="font-size:11px;color:var(--t3);margin-top:2px">${sub}</div>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <div style="font-size:11px;color:var(--t3);cursor:pointer;padding:4px 6px;border-radius:6px;border:0.5px solid var(--brd)" onclick="event.stopPropagation();openRescheduleTask('${t.id}','${(t.title||'').replace(/'/g,"\\'")}','${t.due_date||''}')">Reschedule</div>
+          <div class="chk" onclick="event.stopPropagation();tickDealTaskTimeline('${t.id}',this.closest('.act'))"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        </div>`;
+      card.appendChild(row);
     });
+    wrap.appendChild(card);
   });
 }
 
