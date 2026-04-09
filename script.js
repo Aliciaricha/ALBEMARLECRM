@@ -596,7 +596,7 @@ function rCampaigns(){
       </div>
       <div class="camc-body">${cam.notes||''}</div>
       <div class="camc-foot">
-        ${cam.date?`<span class="pill p-gh">${cam.date}</span>`:''}
+        ${cam.date?`<span class="pill p-gh">${fmtCamDate(cam.date)}</span>`:''}
         ${cam.seg?`<span class="pill p-gold">Seg: ${cam.seg}</span>`:''}
         <span class="pill p-grn">${cnt} contacts</span>
       </div>`;
@@ -661,7 +661,7 @@ function renderCampaignProfile(cam){
         <div class="prof-av sq" style="background:rgba(42,95,168,0.09);border-color:rgba(42,95,168,0.22);color:var(--blue)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>
         </div>
-        <div><div class="prof-name">${cam.name}</div><div class="prof-role-l">${cam.type} · ${cam.date}</div></div>
+        <div><div class="prof-name">${cam.name}</div><div class="prof-role-l">${cam.type} · ${fmtCamDate(cam.date)}</div></div>
       </div>
       <div class="prof-pills">
         <span class="pill ${CC[cam.type]||'p-gh'}">${cam.type}</span>
@@ -1879,6 +1879,15 @@ function copyWaMsg(){
 function closeWaSheet(e){ if(e.target===document.getElementById('wa-sheet-overlay')) document.getElementById('wa-sheet-overlay').classList.remove('open'); }
 
 // ── UTILS ─────────────────────────────────────────────────────────
+const MONTHS_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtCamDate(d){
+  if(!d||d==='TBC'||d==='Ongoing') return d||'';
+  try{
+    const [y,m,day]=d.split('-').map(Number);
+    return `${day} ${MONTHS_SHORT[m-1]} ${y}`;
+  }catch(e){ return d; }
+}
+
 function updateHomeStats(){
   const tc=DEALS.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
   document.getElementById('qs-pipe').textContent=fm(tc);
