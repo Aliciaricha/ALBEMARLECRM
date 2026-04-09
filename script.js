@@ -16,7 +16,7 @@ const TIERS = {
 };
 const TC = {Top:'#8a6d3e', Active:'#2a5fa8', Warm:'#b87020', Sleeper:'#8a93a2'};
 const SC = {Confirmed:'p-grn', Negotiation:'p-gold', Tentative:'p-amb', Waiting:'p-gh'};
-const CC = {'Follow-Up':'p-blu', Seasonal:'p-amb', Mandate:'p-gold', Event:'p-blu', Ongoing:'p-grn', Triggered:'p-gh'};
+const CC = {'Follow-Up':'p-blu', WhatsApp:'p-grn', Calling:'p-blu', Personal:'p-amb', Seasonal:'p-amb', Mandate:'p-gold', Event:'p-blu', Ongoing:'p-grn', Triggered:'p-gh'};
 
 // ── RELATIONSHIP CADENCES ─────────────────────────────────────────
 const DEFAULT_REL_CADENCES = {
@@ -319,10 +319,10 @@ function rHome(){
     const cam=t.camId?CAMPAIGNS.find(c=>c.id===t.camId):null;
     let b;
     if(cam){
-      if(cam.type==='Mandate')                                    b=BUCKETS[1];
-      else if(cam.type==='Seasonal'||cam.type==='Triggered')     b=BUCKETS[3];
-      else if(cam.type==='Follow-Up')                             b=BUCKETS[0];
-      else                                                         b=BUCKETS[2];
+      if(cam.type==='Mandate')                                                          b=BUCKETS[1];
+      else if(cam.type==='Seasonal'||cam.type==='Triggered')                           b=BUCKETS[3];
+      else if(cam.type==='Follow-Up'||cam.type==='WhatsApp'||cam.type==='Calling'||cam.type==='Personal') b=BUCKETS[0];
+      else                                                                              b=BUCKETS[2];
     } else { b=BUCKETS[0]; }
     b.tasks.push(t);
   });
@@ -663,7 +663,7 @@ function rCampaigns(){
 
   CAMPAIGNS.forEach(cam=>{
     let g;
-    if(cam.type==='Follow-Up')                          g=GROUPS[0];
+    if(cam.type==='Follow-Up'||cam.type==='WhatsApp'||cam.type==='Calling'||cam.type==='Personal') g=GROUPS[0];
     else if(cam.type==='Mandate')                        g=GROUPS[1];
     else if(cam.type==='Seasonal'||cam.type==='Triggered') g=GROUPS[3];
     else if(cam.type==='Event'||cam.type==='Ongoing')    g=GROUPS[2];
