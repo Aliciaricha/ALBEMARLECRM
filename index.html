@@ -83,8 +83,14 @@
         <div class="qs"><div class="qs-n" id="d-sg-tent-v">$0</div><div class="qs-cnt" id="d-sg-tent-n">0 deals</div><div class="qs-l">Tentative</div></div>
         <div class="qs"><div class="qs-n" id="d-sg-wait-v">$0</div><div class="qs-cnt" id="d-sg-wait-n">0 deals</div><div class="qs-l">Waiting</div></div>
       </div>
-      <div class="sl" style="margin-bottom:11px">All Deals</div>
-      <div class="deal-cards" id="deal-list"></div>
+      <div class="home-toggle" style="margin:0 16px 14px">
+        <div class="home-toggle-btn on" data-tab="deals" onclick="switchDealTab('deals')">Deals</div>
+        <div class="home-toggle-btn" data-tab="tasks" onclick="switchDealTab('tasks')">Tasks</div>
+      </div>
+      <div id="deal-list-wrap">
+        <div class="deal-cards" id="deal-list"></div>
+      </div>
+      <div id="deal-tasks-timeline" style="display:none;padding:0 16px"></div>
       <div style="height:24px"></div>
     </div>
 
