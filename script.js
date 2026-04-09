@@ -116,11 +116,20 @@ function parsePct(str){
   const m=String(str).match(/(\d+(?:\.\d+)?)/);
   return m?parseFloat(m[1]):null;
 }
+function calcDealPct(partnerName){
+  const p=PARTNERS.find(x=>x.name===partnerName);
+  if(!p) return 0;
+  const ref=parsePct(p.fee), biz=parsePct(p.bizFee);
+  if(ref&&biz) return (ref*biz)/100;
+  if(ref) return ref;
+  return 0;
+}
 function normaliseDeal(r){
+  const pct=calcDealPct(r.partner)||Number(r.commission_rate)||0;
   return {
     id: r.id, clientId: r.client_id, pt: r.partner||'',
     cat: r.category||'Real Estate', v: Number(r.spend)||0,
-    pct: Number(r.commission_rate)||0, s: r.status||'Waiting', n: r.notes||'',
+    pct, s: r.status||'Waiting', n: r.notes||'',
   };
 }
 function normaliseCampaign(r){
@@ -1730,6 +1739,17 @@ Rules: open with [Name], warm luxury tone, 3-4 sentences max, no emojis unless c
   btn.disabled=false; btn.textContent='✦ Generate';
 }
 
+function updateDealCommDisplay(){
+  const partnerName=document.getElementById('nd-partner')?.value||'';
+  const v=parseFloat(document.getElementById('nd-value')?.value)||0;
+  const pct=calcDealPct(partnerName);
+  const el=document.getElementById('nd-comm-display'); if(!el) return;
+  if(!pct){ el.textContent='—'; el.title=''; return; }
+  const p=PARTNERS.find(x=>x.name===partnerName);
+  const label=`${p?.fee||''}${p?.bizFee?' × '+p.bizFee:''} = ${pct.toFixed(2)}%`;
+  el.textContent=v?`${fm(v*(pct/100))} (${pct.toFixed(2)}%)`:label;
+}
+
 // ── DEAL MODAL ────────────────────────────────────────────────────
 let dealTasks=[];
 
@@ -1752,7 +1772,6 @@ function openDealModal(presetClientId, editDealId){
       document.getElementById('nd-cat').value=d.cat;
       document.getElementById('nd-status').value=d.s;
       document.getElementById('nd-value').value=d.v;
-      document.getElementById('nd-pct').value=d.pct;
       document.getElementById('nd-notes').value=d.n;
       document.getElementById('deal-modal-title').textContent='Edit Deal';
       document.getElementById('deal-submit-btn').textContent='Save Changes';
@@ -1763,12 +1782,13 @@ function openDealModal(presetClientId, editDealId){
   } else {
     document.getElementById('deal-modal-title').textContent='New Deal';
     document.getElementById('deal-submit-btn').textContent='Add Deal';
-    ['nd-value','nd-pct','nd-notes'].forEach(id=>document.getElementById(id).value='');
+    ['nd-value','nd-notes'].forEach(id=>document.getElementById(id).value='');
     tasksSection.style.display='none';
     taskForm.style.display='none';
     dealTasks=[];
   }
   openModal('modal-deal');
+  setTimeout(updateDealCommDisplay, 50);
 }
 
 // ── DEAL TASKS ────────────────────────────────────────────────────
@@ -1838,15 +1858,16 @@ async function toggleDealTask(id,done){
 
 async function saveDeal(){
   const v=parseFloat(document.getElementById('nd-value').value);
-  const pct=parseFloat(document.getElementById('nd-pct').value);
   if(!v||isNaN(v)){ alert('Please enter a deal value.'); return; }
+  const partnerName=document.getElementById('nd-partner').value;
+  const pct=calcDealPct(partnerName);
   const clientId=document.getElementById('nd-client').value;
   const row={
     client_id:clientId,
-    partner:document.getElementById('nd-partner').value,
+    partner:partnerName,
     category:document.getElementById('nd-cat').value,
     status:document.getElementById('nd-status').value,
-    spend:v, commission_rate:isNaN(pct)?0.6:pct,
+    spend:v, commission_rate:pct,
     notes:document.getElementById('nd-notes').value.trim(),
   };
 
