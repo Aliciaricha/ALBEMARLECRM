@@ -564,32 +564,81 @@ function rDeals(){
     document.getElementById('d-sg-'+key+'-n').textContent=sd.length+(sd.length===1?' deal':' deals');
   });
 
-  // Grouped deal cards by stage
+  // Flat deal list
   const list=document.getElementById('deal-list'); list.innerHTML='';
-  const STAGES=['Confirmed','Negotiation','Tentative','Waiting'];
-  let gi=0;
-  STAGES.forEach(stage=>{
-    const sd=DEALS.filter(d=>d.s===stage);
-    if(!sd.length) return;
+  DEALS.forEach((d,i)=>{
+    const client=CLIENTS.find(c=>c.id===d.clientId);
+    const cname=client?client.name:d.clientId;
+    const com=d.v*(d.pct/100);
+    const el=document.createElement('div');
+    el.className='dc gc-s a'; el.style.animationDelay=(i*0.05)+'s';
+    el.onclick=()=>openDealModal(d.clientId,d.id);
+    el.innerHTML=`<div class="dc-top">
+      <div><div class="dc-cli">${cname}</div><div class="dc-par">${d.pt} · ${d.cat}</div></div>
+      <span class="pill p-gh" style="font-size:9px;flex-shrink:0">${d.s}</span>
+    </div>
+    <div class="dc-bot">
+      <div><div class="dc-val">${fm(com)}</div><div class="dc-spend">${fm(d.v)} client spend</div></div>
+    </div>`;
+    list.appendChild(el);
+  });
+}
+
+let dealTab='deals';
+function switchDealTab(tab){
+  dealTab=tab;
+  document.querySelectorAll('#s-deals .home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
+  document.getElementById('deal-list-wrap').style.display=tab==='deals'?'':'none';
+  document.getElementById('deal-tasks-timeline').style.display=tab==='tasks'?'':'none';
+  if(tab==='tasks') renderDealTasksTimeline();
+}
+
+async function renderDealTasksTimeline(){
+  const wrap=document.getElementById('deal-tasks-timeline'); wrap.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
+  const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false});
+  const tasks=data||[];
+  if(!tasks.length){ wrap.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding tasks.</div>'; return; }
+  const today=new Date(); today.setHours(0,0,0,0);
+  const buckets=new Map();
+  tasks.forEach(t=>{
+    if(!t.due_date){ const k='No Date'; if(!buckets.has(k)) buckets.set(k,[]); buckets.get(k).push(t); return; }
+    const d=new Date(t.due_date); d.setHours(0,0,0,0);
+    const diff=Math.round((d-today)/86400000);
+    let label;
+    if(diff<0) label='Overdue';
+    else if(diff===0) label='Today';
+    else if(diff===1) label='Tomorrow';
+    else label=d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    if(!buckets.has(label)) buckets.set(label,[]);
+    buckets.get(label).push(t);
+  });
+  wrap.innerHTML='';
+  buckets.forEach((items,label)=>{
     const hdr=document.createElement('div');
-    hdr.className='deal-group-hdr'; hdr.textContent=stage;
-    list.appendChild(hdr);
-    sd.forEach(d=>{
-      const client=CLIENTS.find(c=>c.id===d.clientId);
-      const cname=client?client.name:d.clientId;
-      const com=d.v*(d.pct/100);
+    hdr.className='rec-cat-header';
+    hdr.style.cssText+=(label==='Overdue'?';color:var(--red)':label==='Today'?';color:var(--gold)':'');
+    hdr.textContent=label;
+    wrap.appendChild(hdr);
+    items.forEach((t,i)=>{
+      const deal=DEALS.find(d=>d.id===t.deal_id);
+      const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
+      const sub=[client?.name,deal?.pt,deal?.cat].filter(Boolean).join(' · ');
       const el=document.createElement('div');
-      el.className='dc gc-s a'; el.style.animationDelay=(gi++*0.05)+'s';
-      el.onclick=()=>openDealModal(d.clientId,d.id);
-      el.innerHTML=`<div class="dc-top">
-        <div><div class="dc-cli">${cname}</div><div class="dc-par">${d.pt} · ${d.cat}</div></div>
-      </div>
-      <div class="dc-bot">
-        <div><div class="dc-val">${fm(com)}</div><div class="dc-spend">${fm(d.v)} client spend</div></div>
-      </div>`;
-      list.appendChild(el);
+      el.className='tc normal a'; el.style.animationDelay=(i*0.04)+'s';
+      el.innerHTML=`<div class="tc-av deal-tc-av"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <div class="tc-body" style="cursor:pointer"><div class="tc-act">${t.title}</div><div class="tc-why">${sub}</div></div>
+        <div class="chk"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
+      el.querySelector('.tc-body').onclick=(ev)=>{ev.stopPropagation();openRescheduleTask(t.id,t.title,t.due_date);};
+      el.querySelector('.chk').onclick=(ev)=>{ev.stopPropagation();tickDealTaskTimeline(t.id,el);};
+      wrap.appendChild(el);
     });
   });
+}
+
+async function tickDealTaskTimeline(id,card){
+  await SB.from('deal_tasks').update({done:true}).eq('id',id);
+  card.style.transition='opacity 0.3s'; card.style.opacity='0';
+  setTimeout(()=>{ card.remove(); },300);
 }
 
 // ── CAMPAIGNS ─────────────────────────────────────────────────────
