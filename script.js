@@ -627,8 +627,9 @@ async function renderDealTasksTimeline(){
       const sub=[client?.name,deal?.pt].filter(Boolean).join(' · ');
       const row=document.createElement('div');
       row.className='act';
-      row.style.cssText='padding:10px 14px;gap:10px;';
+      row.style.cssText='padding:10px 14px;gap:12px;';
       row.innerHTML=`
+        <div style="width:6px;height:6px;border-radius:50%;background:var(--gold);opacity:0.5;flex-shrink:0;margin-top:2px"></div>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.title}</div>
           ${sub?`<div style="font-size:11px;color:var(--t3);margin-top:2px">${sub}</div>`:''}
