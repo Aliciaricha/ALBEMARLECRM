@@ -655,19 +655,19 @@ function rCampaigns(){
   const list=document.getElementById('cam-list'); list.innerHTML='';
 
   const GROUPS=[
-    {key:'followups', label:'Follow-Ups',          cams:[]},
     {key:'mandates',  label:'Mandates',             cams:[]},
     {key:'luxury',    label:'Luxury',               cams:[]},
     {key:'holiday',   label:'Holidays & Birthdays', cams:[]},
+    {key:'followups', label:'Follow-Ups',           cams:[]},
   ];
 
   CAMPAIGNS.forEach(cam=>{
     let g;
-    if(cam.type==='Follow-Up'||cam.type==='WhatsApp'||cam.type==='Calling'||cam.type==='Personal') g=GROUPS[0];
-    else if(cam.type==='Mandate')                        g=GROUPS[1];
-    else if(cam.type==='Seasonal'||cam.type==='Triggered') g=GROUPS[3];
-    else if(cam.type==='Event'||cam.type==='Ongoing')    g=GROUPS[2];
-    else                                                  g=GROUPS[2];
+    if(cam.type==='Follow-Up'||cam.type==='WhatsApp'||cam.type==='Calling'||cam.type==='Personal') g=GROUPS[3];
+    else if(cam.type==='Mandate')                        g=GROUPS[0];
+    else if(cam.type==='Seasonal'||cam.type==='Triggered') g=GROUPS[2];
+    else if(cam.type==='Event'||cam.type==='Ongoing')    g=GROUPS[1];
+    else                                                  g=GROUPS[1];
     g.cams.push(cam);
   });
 
