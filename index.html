@@ -288,6 +288,11 @@
           <div class="int-chip" onclick="this.classList.toggle('on')">The Luxury Collective</div>
         </div>
       </div>
+      <div class="form-field"><label>Tags</label>
+        <div class="int-chips" id="nc-tag-chips">
+          <div class="int-chip" onclick="this.classList.toggle('on')">High Potential</div>
+        </div>
+      </div>
       <div class="form-field"><label>Notes</label><textarea id="nc-notes" placeholder="Key context about this client…"></textarea></div>
     </div>
     <div class="form-footer">
@@ -349,6 +354,11 @@
           <div class="int-chip" onclick="this.classList.toggle('on')">Sports</div>
           <div class="int-chip" onclick="this.classList.toggle('on')">Dior</div>
           <div class="int-chip" onclick="this.classList.toggle('on')">The Luxury Collective</div>
+        </div>
+      </div>
+      <div class="form-field"><label>Tags</label>
+        <div class="int-chips" id="ec-tag-chips">
+          <div class="int-chip" onclick="this.classList.toggle('on')">High Potential</div>
         </div>
       </div>
       <div class="form-field"><label>Notes</label><textarea id="ec-notes"></textarea></div>
@@ -695,6 +705,13 @@
       <div class="filter-section">
         <div class="filter-sec-lbl">Interests</div>
         <div class="filter-chips-wrap" id="filter-interests-chips"></div>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-sec-lbl">Tags</div>
+        <div class="filter-chips-wrap">
+          <div class="fchip" data-group="tag" data-val="High Potential" onclick="toggleFChip(this)">High Potential</div>
+        </div>
       </div>
 
     </div>

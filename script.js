@@ -39,7 +39,7 @@ let CLIENTS=[], PARTNERS=[], DEALS=[], CAMPAIGNS=[], RECS=[];
 let doneTasks = new Set(); // task_key set from DB
 let cF='All', curTab='home';
 let relF='All'; // KEEP for backward compat but no longer used in UI
-let clientFilters={relationship:null, nw:null, interest:null}; // active filter state
+let clientFilters={relationship:null, nw:null, interest:null, tag:null}; // active filter state
 let selSegVal='All', editSegVal='All';
 let editClientId=null, editPartnerId=null, editCampaignId=null;
 let editingDealId=null;
@@ -867,6 +867,7 @@ function rClients(){
   if(clientFilters.relationship) list=list.filter(c=>c.relationship===clientFilters.relationship);
   if(clientFilters.nw) list=list.filter(c=>c.nw===clientFilters.nw);
   if(clientFilters.interest) list=list.filter(c=>(c.int||[]).some(i=>i.toLowerCase()===clientFilters.interest.toLowerCase()));
+  if(clientFilters.tag) list=list.filter(c=>(c.int||[]).includes(clientFilters.tag));
   if(clientFilters._nat) list=list.filter(c=>matchesNatCity(c.nat,clientFilters._nat));
   if(clientFilters._city) list=list.filter(c=>matchesNatCity(c.city,clientFilters._city));
 
@@ -903,6 +904,7 @@ function rClients(){
     if(clientFilters.relationship) pills.push({label:clientFilters.relationship,key:'relationship'});
     if(clientFilters.nw) pills.push({label:clientFilters.nw,key:'nw'});
     if(clientFilters.interest) pills.push({label:clientFilters.interest,key:'interest'});
+    if(clientFilters.tag) pills.push({label:clientFilters.tag,key:'tag'});
     if(clientFilters._nat) pills.push({label:'Nationality: '+clientFilters._nat,key:'_nat'});
     if(clientFilters._city) pills.push({label:'City: '+clientFilters._city,key:'_city'});
     activeBar.innerHTML=pills.map(p=>`<div class="active-fpill" onclick="removeFilter('${p.key}')">${p.label} ✕</div>`).join('');
@@ -927,6 +929,7 @@ function rClients(){
   </div>
   <div class="pc-r">
     ${c.relationship?`<span class="pill p-gh" style="font-size:9px">${c.relationship}</span>`:''}
+    ${(c.int||[]).includes('High Potential')?'<span class="pill" style="font-size:9px;background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':''}
     ${clOv?'<span class="pill p-red" style="font-size:9px">Call due</span>':waOv?'<span class="pill p-amb" style="font-size:9px">Follow up</span>':''}
   </div>`;
     el.appendChild(div);
@@ -960,6 +963,7 @@ function openClientFilters(){
   // Restore current filter state in chips
   document.querySelectorAll('.fchip[data-group="relationship"]').forEach(c=>c.classList.toggle('on',c.dataset.val===clientFilters.relationship));
   document.querySelectorAll('.fchip[data-group="nw"]').forEach(c=>c.classList.toggle('on',c.dataset.val===clientFilters.nw));
+  document.querySelectorAll('.fchip[data-group="tag"]').forEach(c=>c.classList.toggle('on',c.dataset.val===clientFilters.tag));
   openModal('modal-client-filters');
 }
 
@@ -975,12 +979,13 @@ function applyClientFilters(){
   clientFilters.relationship=document.querySelector('.fchip[data-group="relationship"].on')?.dataset.val||null;
   clientFilters.nw=document.querySelector('.fchip[data-group="nw"].on')?.dataset.val||null;
   clientFilters.interest=document.querySelector('.fchip[data-group="interest"].on')?.dataset.val||null;
+  clientFilters.tag=document.querySelector('.fchip[data-group="tag"].on')?.dataset.val||null;
   closeModal('modal-client-filters');
   rClients();
 }
 
 function clearClientFilters(){
-  clientFilters={relationship:null,nw:null,interest:null};
+  clientFilters={relationship:null,nw:null,interest:null,tag:null};
   document.querySelectorAll('.fchip').forEach(c=>c.classList.remove('on'));
   closeModal('modal-client-filters');
   rClients();
@@ -988,11 +993,11 @@ function clearClientFilters(){
 
 function filterByNat(val){
   // Called when tapping nationality in a client profile
-  clientFilters={relationship:null,nw:null,interest:null,_nat:val};
+  clientFilters={relationship:null,nw:null,interest:null,tag:null,_nat:val};
   if(curTab!=='clients') go('clients'); else rClients();
 }
 function filterByCity(val){
-  clientFilters={relationship:null,nw:null,interest:null,_city:val};
+  clientFilters={relationship:null,nw:null,interest:null,tag:null,_city:val};
   if(curTab!=='clients') go('clients'); else rClients();
 }
 
@@ -1443,7 +1448,7 @@ function selEditSeg(el,val){ editSegVal=val; document.querySelectorAll('#edit-se
 async function saveClient(){
   const name=document.getElementById('nc-name').value.trim();
   if(!name){ alert('Please enter a full name.'); return; }
-  const ints=[...document.querySelectorAll('#nc-int-chips .int-chip.on')].map(el=>el.textContent);
+  const ints=[...document.querySelectorAll('#nc-int-chips .int-chip.on, #nc-tag-chips .int-chip.on')].map(el=>el.textContent);
   const row={
     name, position:document.getElementById('nc-role').value.trim(),
     city:document.getElementById('nc-city').value.trim(),
@@ -1462,7 +1467,7 @@ async function saveClient(){
   CLIENTS.push(normaliseClient(data));
   closeModal('modal-client');
   ['nc-name','nc-role','nc-city','nc-nat','nc-notes'].forEach(id=>document.getElementById(id).value='');
-  document.querySelectorAll('#nc-int-chips .int-chip').forEach(el=>el.classList.remove('on'));
+  document.querySelectorAll('#nc-int-chips .int-chip, #nc-tag-chips .int-chip').forEach(el=>el.classList.remove('on'));
   rClients(); updateHomeStats(); showToast('Client added ✓');
 }
 
@@ -1478,7 +1483,7 @@ function openEditClient(id){
   document.getElementById('ec-rel').value=c.rel||'Unknown';
   document.getElementById('ec-rel2').value=c.relationship||'General';
   const clientInts=(c.int||[]).map(i=>i.toLowerCase());
-  document.querySelectorAll('#ec-int-chips .int-chip').forEach(el=>el.classList.toggle('on',clientInts.includes(el.textContent.toLowerCase())));
+  document.querySelectorAll('#ec-int-chips .int-chip, #ec-tag-chips .int-chip').forEach(el=>el.classList.toggle('on',clientInts.includes(el.textContent.toLowerCase())));
   document.getElementById('ec-notes').value=c.notes||'';
   document.getElementById('ec-proxy').value=c.proxyContact||'';
   document.getElementById('ec-proxy-row').style.display=c.relationship==='Proxy'?'':'none';
@@ -1487,7 +1492,7 @@ function openEditClient(id){
 
 async function saveEditClient(){
   const c=CLIENTS.find(x=>x.id===editClientId); if(!c) return;
-  const ints=[...document.querySelectorAll('#ec-int-chips .int-chip.on')].map(el=>el.textContent);
+  const ints=[...document.querySelectorAll('#ec-int-chips .int-chip.on, #ec-tag-chips .int-chip.on')].map(el=>el.textContent);
   const updates={
     name:document.getElementById('ec-name').value.trim()||c.name,
     position:document.getElementById('ec-role').value.trim(),
