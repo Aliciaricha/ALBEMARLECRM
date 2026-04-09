@@ -438,13 +438,33 @@ async function renderHomeDealTasks(){
         </div>`;
       // Tick
       el.querySelector('.chk').onclick=(ev)=>tickDealTask(t.id,el.querySelector('.chk'),ev);
-      // Open deal modal on card click (not body or chk)
+      el.querySelector('.tc-body').onclick=(ev)=>{ev.stopPropagation();openRescheduleTask(t.id,t.title,t.due_date);};
       if(deal) el.onclick=(ev)=>{if(ev.target.closest('.chk')||ev.target.closest('.tc-body')) return; openDealModal(deal.clientId,deal.id);};
       list.appendChild(el);
     });
   });
 }
 
+
+let rescheduleTaskId=null;
+function openRescheduleTask(id, title, currentDate){
+  rescheduleTaskId=id;
+  document.getElementById('reschedule-task-name').textContent=title||'Task';
+  document.getElementById('reschedule-date').value=currentDate||'';
+  openModal('modal-reschedule-task');
+}
+async function saveRescheduleTask(){
+  const newDate=document.getElementById('reschedule-date').value;
+  if(!newDate||!rescheduleTaskId) return;
+  const {error}=await SB.from('deal_tasks').update({due_date:newDate}).eq('id',rescheduleTaskId);
+  if(error){ showToast('Could not reschedule'); return; }
+  const t=homeDealTasks?.find(x=>x.id===rescheduleTaskId);
+  if(t) t.due_date=newDate;
+  closeModal('modal-reschedule-task');
+  homeDealTasks=null; // force reload
+  renderHomeDealTasks();
+  showToast('Task rescheduled ✓');
+}
 
 async function deleteDealTask(id, source){
   const {error}=await SB.from('deal_tasks').delete().eq('id',id);
