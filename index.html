@@ -717,6 +717,22 @@
 </div>
 
 
+<!-- RESCHEDULE TASK -->
+<div class="modal-overlay" id="modal-reschedule-task" onclick="closeModalOut(event,'modal-reschedule-task')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Reschedule Task</div>
+    <div class="form-body">
+      <div class="form-field"><div id="reschedule-task-name" style="font-size:14px;font-weight:600;color:var(--t1)"></div></div>
+      <div class="form-field"><label>New Due Date</label><input type="date" id="reschedule-date"></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveRescheduleTask()">Save</button>
+      <div class="form-cancel" onclick="closeModal('modal-reschedule-task')">Cancel</div>
+    </div>
+  </div>
+</div>
+
 <script src="script.js" defer></script>
 </body>
 </html>
