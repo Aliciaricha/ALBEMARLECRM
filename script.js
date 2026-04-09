@@ -1277,7 +1277,7 @@ function openP(p){
       <div class="sec-lbl">Partnership Terms</div>
       ${p.fee?`<div class="sec-row"><div class="sec-k">Referral Fee</div><div class="sec-v">${p.fee}</div></div>`:''}
       ${p.bizFee?`<div class="sec-row"><div class="sec-k">Business Fee</div><div class="sec-v">${p.bizFee}</div></div>`:''}
-      ${p.spend?`<div class="sec-row"><div class="sec-k">Client Spend Threshold</div><div class="sec-v">${fm(p.spend)}</div></div>`:''}
+      ${(()=>{const r=parsePct(p.fee);if(!r||!p.bizFee) return '';const raw=100000/(r/100);const threshold=Math.floor(raw/100000)*100000||Math.floor(raw/10000)*10000;return `<div class="sec-row"><div class="sec-k">Client Spend Threshold</div><div class="sec-v" style="font-weight:600">${fm(threshold)}</div></div>`;})()}
       ${(()=>{const pDeals=DEALS.filter(d=>d.pt===p.name);if(!pDeals.length||!parsePct(p.fee)) return '';const totalComm=pDeals.reduce((s,d)=>s+(d.v*(d.pct/100)),0);const effComm=totalComm*(parsePct(p.fee)/100);return `<div class="sec-row"><div class="sec-k">Effective Commission</div><div class="sec-v" style="color:var(--gold);font-weight:700">${fm(effComm)}</div></div><div class="sec-row"><div class="sec-k">From Deals</div><div class="sec-v">${pDeals.length} deal${pDeals.length!==1?'s':''} · ${fm(totalComm)} total comm.</div></div>`;})()}
     </div>
     ${p.notes?`<div class="prof-sec"><div class="sec-lbl">Notes</div><div class="sec-notes">${p.notes}</div></div>`:''}
