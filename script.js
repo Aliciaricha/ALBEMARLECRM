@@ -1491,9 +1491,7 @@ async function openC(c){
 
   const cCams=CAMPAIGNS.filter(cam=>getCampaignClients(cam).some(cl2=>cl2.id===c.id));
   const camHtml=cCams.length?cCams.map(cam=>`<span class="pill p-cam" onclick="openCampaign(CAMPAIGNS.find(x=>x.id==='${cam.id}'))">${cam.name}</span>`).join(''):'';
-
-  // Load activities (async, then update)
-  await loadClientActivities(c.id, c);
+  // NOTE: activities are loaded AFTER panel opens (see below) to avoid blocking
 
   document.getElementById('ps-client-body').innerHTML=`
     <div class="prof-back-row">
@@ -1531,7 +1529,7 @@ async function openC(c){
     ${c.notes?`<div class="prof-sec"><div class="sec-lbl">Notes</div><div class="sec-notes">${c.notes}</div></div>`:''}
     <div class="prof-sec">
       <div class="sec-lbl">Activity Timeline</div>
-      <div id="atl-inner">${renderActivityTimeline(c.id)}</div>
+      <div id="atl-inner"><div class="atl-loading">Loading history…</div></div>
     </div>
     <div class="acts">
       <div class="act" onclick="openWaSheet(CLIENTS.find(x=>x.id==='${c.id}'),null)">
@@ -1565,6 +1563,10 @@ async function openC(c){
     </div>
     <div style="height:36px"></div>`;
   pushProf('ps-client');
+  // Load activities in background — panel is already open and animating
+  await loadClientActivities(c.id, c);
+  const tlInner=document.getElementById('atl-inner');
+  if(tlInner && currentActivityClientId===c.id) tlInner.innerHTML=renderActivityTimeline(c.id);
 }
 
 // ── LOG CALL / WA / MEETING ───────────────────────────────────────
@@ -1872,7 +1874,13 @@ function closeProf(id){
 }
 
 // ── MODALS ────────────────────────────────────────────────────────
-function openModal(id){ const el=document.getElementById(id); if(el) el.classList.add('open'); else console.error('openModal: element not found:',id); }
+function openModal(id){
+  const el=document.getElementById(id);
+  if(!el){ console.error('openModal: element not found:',id); return; }
+  el.classList.add('open');
+  const sheet=el.querySelector('.modal-sheet');
+  if(sheet) sheet.scrollTop=0;
+}
 function closeModal(id){ const el=document.getElementById(id); if(el) el.classList.remove('open'); }
 function closeModalOut(e,id){ if(e.target===document.getElementById(id)) closeModal(id); }
 function selSeg(el,val){ selSegVal=val; document.querySelectorAll('#seg-chips .seg-chip').forEach(c=>c.classList.toggle('on',c===el)); }
