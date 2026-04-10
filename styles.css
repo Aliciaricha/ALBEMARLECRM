@@ -175,7 +175,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .prof-wrap { padding: 0 16px 20px; }
 .prof-back-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 0 12px; }
 .prof-back { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--gold); cursor: pointer; padding: 0; }
-.prof-edit-btn { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px; border: 0.5px solid var(--gold-border); background: rgba(138,109,62,0.08); color: var(--gold); font-family: 'Manrope'; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; cursor: pointer; }
+.prof-edit-btn { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px; border: 0.5px solid var(--gold-border); background: rgba(138,109,62,0.08); color: var(--gold); font-family: 'Manrope'; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: rgba(138,109,62,0.15); }
+.prof-back { touch-action: manipulation; }
 .prof-hero { border-radius: var(--r-xl); padding: 22px 20px 18px; margin-bottom: 12px; background: rgba(255,255,255,0.62); backdrop-filter: blur(40px) saturate(2.0) brightness(1.06); -webkit-backdrop-filter: blur(40px) saturate(2.0) brightness(1.06); border: 0.5px solid rgba(255,255,255,0.88); box-shadow: 0 12px 48px rgba(30,60,100,0.12), inset 0 1px 0 rgba(255,255,255,0.9); }
 .prof-av-row { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
 .prof-av { width: 58px; height: 58px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-family: 'Cormorant Garamond', serif; font-size: 20px; background: rgba(138,109,62,0.10); border: 0.5px solid var(--gold-border); color: var(--gold); }
