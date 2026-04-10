@@ -1896,11 +1896,12 @@ async function saveClient(){
     proxy_contact: document.getElementById('nc-proxy').value.trim()||null,
     interests:ints,
     notes:document.getElementById('nc-notes').value.trim(),
-    dob:document.getElementById('nc-dob').value||null,
     sort_order: CLIENTS.length
   };
+  const ncDob=document.getElementById('nc-dob')?.value||null;
   const {data,error}=await SB.from('clients').insert(row).select().single();
   if(error){ alert('Error saving: '+error.message); return; }
+  if(ncDob){ await SB.from('clients').update({dob:ncDob}).eq('id',data.id); data.dob=ncDob; }
   CLIENTS.push(normaliseClient(data));
   closeModal('modal-client');
   ['nc-name','nc-role','nc-city','nc-nat','nc-notes','nc-dob'].forEach(id=>document.getElementById(id).value='');
@@ -1931,6 +1932,7 @@ function openEditClient(id){
 async function saveEditClient(){
   const c=CLIENTS.find(x=>x.id===editClientId); if(!c) return;
   const ints=[...document.querySelectorAll('#ec-int-chips .int-chip.on, #ec-tag-chips .int-chip.on')].map(el=>el.textContent);
+  const dobVal=document.getElementById('ec-dob')?.value||null;
   const updates={
     name:document.getElementById('ec-name').value.trim()||c.name,
     position:document.getElementById('ec-role').value.trim(),
@@ -1943,10 +1945,11 @@ async function saveEditClient(){
     proxy_contact: document.getElementById('ec-proxy').value.trim()||null,
     interests:ints,
     notes:document.getElementById('ec-notes').value.trim(),
-    dob:document.getElementById('ec-dob').value||null,
   };
   const {error}=await SB.from('clients').update(updates).eq('id',editClientId);
   if(error){ console.error('saveEditClient error:',error); alert('Error: '+error.message); return; }
+  // Save dob separately — silently skip if column doesn't exist yet
+  if(dobVal!==undefined){ const {error:dobErr}=await SB.from('clients').update({dob:dobVal}).eq('id',editClientId); if(!dobErr) updates.dob=dobVal; }
   Object.assign(c, normaliseClient({...updates, id:editClientId, last_wa:c.wa, last_call:c.call, follow_up_date:c.followUp, has_deal:c.deal, proxy_contact:updates.proxy_contact}));
   closeEditPanel('ps-edit-client');
   openC(c);
