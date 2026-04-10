@@ -1540,9 +1540,9 @@ async function toggleVip(clientId){
     c.int=[...c.int,'VIP'];
     c.vip=true;
   }
-  await SB.from('clients').update({interests:c.int}).eq('id',clientId);
+  const {error:vipErr}=await SB.from('clients').update({interests:c.int}).eq('id',clientId);
+  if(vipErr){ console.error('VIP save error:',vipErr); showToast('Save failed: '+vipErr.message); return; }
   rClients();
-  // Refresh open profile
   openC(c);
   showToast(c.vip?'VIP status added ✓':'VIP status removed');
 }
@@ -1865,7 +1865,7 @@ async function saveEditClient(){
     notes:document.getElementById('ec-notes').value.trim(),
   };
   const {error}=await SB.from('clients').update(updates).eq('id',editClientId);
-  if(error){ alert('Error: '+error.message); return; }
+  if(error){ console.error('saveEditClient error:',error); alert('Error: '+error.message); return; }
   Object.assign(c, normaliseClient({...updates, id:editClientId, last_wa:c.wa, last_call:c.call, follow_up_date:c.followUp, has_deal:c.deal, proxy_contact:updates.proxy_contact}));
   closeModal('modal-edit-client');
   openC(c);
