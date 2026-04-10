@@ -1223,15 +1223,15 @@ function rClients(){
     const div=document.createElement('div');
     div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
     div.onclick=()=>openC(c);
-    const cardTag=c.deal?'<span class="pill p-gold" style="font-size:9px;margin-top:4px;align-self:flex-start">Deal</span>':(c.int||[]).includes('High Potential')?'<span class="pill" style="font-size:9px;margin-top:4px;align-self:flex-start;background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':'';
+    const cardTag=c.deal?'<span class="pill p-gold pc-pill">Deal</span>':(c.int||[]).includes('High Potential')?'<span class="pill pc-pill" style="background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':c.vip?'<span class="pill pc-pill" style="background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">VIP</span>':'';
     const vipStar=c.vip?`<div class="pc-vip-star"><svg width="11" height="11" viewBox="0 0 24 24" fill="var(--gold)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>`:'';
     div.innerHTML=`${vipStar}<div class="pc-av">${ini(c.name)}</div>
   <div class="pc-info">
     <div class="pc-name">${c.name}</div>
     <div class="pc-sub">${c.role||c.city||''}</div>
-    ${cardTag}
     ${c.relationship==='Proxy'&&c.proxyContact?`<div class="pc-proxy">via ${c.proxyContact}</div>`:''}
-  </div>`;
+  </div>
+  <div class="pc-r">${cardTag}</div>`;
     el.appendChild(div);
   });
 }
