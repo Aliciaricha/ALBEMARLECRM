@@ -737,6 +737,23 @@
   </div>
 </div>
 
+<!-- EDIT ACTIVITY -->
+<div class="modal-overlay" id="modal-edit-activity" onclick="closeModalOut(event,'modal-edit-activity')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Edit Activity</div>
+    <div class="form-body">
+      <div class="form-field"><div id="edit-act-type" style="font-size:13px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:0.1em"></div></div>
+      <div class="form-field"><label>Date</label><input type="date" id="edit-act-date"></div>
+      <div class="form-field"><label>Notes (optional)</label><input type="text" id="edit-act-notes" placeholder="Add a note…"></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveEditActivity()">Save</button>
+      <div class="form-cancel" onclick="closeModal('modal-edit-activity')">Cancel</div>
+    </div>
+  </div>
+</div>
+
 <!-- SCHEDULE MEETING -->
 <div class="modal-overlay" id="modal-schedule-meeting" onclick="closeModalOut(event,'modal-schedule-meeting')">
   <div class="modal-sheet">

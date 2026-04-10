@@ -1395,8 +1395,52 @@ function renderActivityTimeline(clientId){
         <div class="atl-date">${fmtActivityDate(a.occurred_at)}</div>
         ${a.notes&&a.type!=='campaign'?`<div class="atl-notes">${a.notes}</div>`:''}
       </div>
+      ${a.type!=='campaign'?`<div class="atl-edit" onclick="openEditActivity('${a.id}','${clientId}')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </div>`:''}
     </div>`).join('')}
   </div>`;
+}
+
+let editActivityId=null, editActivityClientId=null;
+function openEditActivity(actId, clientId){
+  const act=CLIENT_ACTIVITIES.find(a=>a.id===actId); if(!act) return;
+  editActivityId=actId; editActivityClientId=clientId;
+  document.getElementById('edit-act-type').textContent=activityLabel(act.type);
+  // Pre-fill date from occurred_at
+  const d=new Date(act.occurred_at);
+  const dateStr=d.toISOString().split('T')[0];
+  document.getElementById('edit-act-date').value=dateStr;
+  document.getElementById('edit-act-notes').value=act.notes||'';
+  openModal('modal-edit-activity');
+}
+async function saveEditActivity(){
+  const act=CLIENT_ACTIVITIES.find(a=>a.id===editActivityId); if(!act) return;
+  const dateVal=document.getElementById('edit-act-date').value;
+  const notes=document.getElementById('edit-act-notes').value.trim();
+  if(!dateVal){ showToast('Please set a date'); return; }
+  const newOccurred=new Date(dateVal+'T12:00:00').toISOString();
+  const {error}=await SB.from('client_activities').update({occurred_at:newOccurred, notes:notes||null}).eq('id',editActivityId);
+  if(error){ showToast('Could not save: '+error.message); return; }
+  // Update in-memory
+  act.occurred_at=newOccurred; act.notes=notes||null;
+  CLIENT_ACTIVITIES.sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at));
+  // Update client's last_wa / last_call if this is the most recent of its type
+  const c=CLIENTS.find(x=>x.id===editActivityClientId);
+  if(c){
+    const sameType=CLIENT_ACTIVITIES.filter(a=>a.client_id===editActivityClientId&&a.type===act.type);
+    const mostRecent=sameType[0];
+    if(mostRecent?.id===editActivityId){
+      const dateOnly=dateVal;
+      if(act.type==='whatsapp'){ await SB.from('clients').update({last_wa:dateOnly}).eq('id',c.id); c.wa=dateOnly; }
+      if(act.type==='call'){     await SB.from('clients').update({last_call:dateOnly}).eq('id',c.id); c.call=dateOnly; }
+    }
+  }
+  closeModal('modal-edit-activity');
+  const tlInner=document.getElementById('atl-inner');
+  if(tlInner) tlInner.innerHTML=renderActivityTimeline(editActivityClientId);
+  rHome();
+  showToast('Activity updated ✓');
 }
 
 
