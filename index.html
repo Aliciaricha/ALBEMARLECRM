@@ -739,6 +739,23 @@
   </div>
 </div>
 
+<!-- SCHEDULE MEETING -->
+<div class="modal-overlay" id="modal-schedule-meeting" onclick="closeModalOut(event,'modal-schedule-meeting')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Schedule Meeting</div>
+    <div class="form-body">
+      <div class="form-field"><div id="schedule-meeting-client" style="font-size:14px;font-weight:600;color:var(--t1)"></div></div>
+      <div class="form-field"><label>Meeting Title (optional)</label><input type="text" id="schedule-meeting-title" placeholder="e.g. Lunch at Claridge's"></div>
+      <div class="form-field"><label>Due Date</label><input type="date" id="schedule-meeting-date"></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveScheduleMeeting()">Schedule</button>
+      <div class="form-cancel" onclick="closeModal('modal-schedule-meeting')">Cancel</div>
+    </div>
+  </div>
+</div>
+
 <script src="script.js" defer></script>
 </body>
 </html>

@@ -35,7 +35,7 @@ function loadRelCadences(){
 function saveRelCadences(){ localStorage.setItem('rel_cadences',JSON.stringify(REL_CADENCES)); }
 
 // ── STATE ─────────────────────────────────────────────────────────
-let CLIENTS=[], PARTNERS=[], DEALS=[], CAMPAIGNS=[], RECS=[];
+let CLIENTS=[], PARTNERS=[], DEALS=[], CAMPAIGNS=[], RECS=[], MEETINGS=[];
 let doneTasks = new Set(); // task_key set from DB
 let cF='All', curTab='home';
 let relF='All'; // KEEP for backward compat but no longer used in UI
@@ -66,13 +66,14 @@ function showToast(msg){ const t=document.getElementById('toast'); t.textContent
 async function loadAll(){
   const today = new Date().toISOString().split('T')[0];
 
-  const [cR, pR, dR, camR, recR, taskR] = await Promise.all([
+  const [cR, pR, dR, camR, recR, taskR, mtgR] = await Promise.all([
     SB.from('clients').select('*').order('sort_order'),
     SB.from('partners').select('*').order('sort_order'),
     SB.from('deals').select('*').order('created_at'),
     SB.from('campaigns').select('*').order('sort_order'),
     SB.from('recommendations').select('*').order('category').order('sort_order'),
     SB.from('task_completions').select('task_key,reset_date'),
+    SB.from('client_meetings').select('*').eq('done',false).order('due_date'),
   ]);
 
   CLIENTS   = (cR.data||[]).map(normaliseClient);
@@ -80,6 +81,7 @@ async function loadAll(){
   DEALS     = (dR.data||[]).map(normaliseDeal);
   CAMPAIGNS = (camR.data||[]).map(normaliseCampaign);
   RECS      = recR.data||[];
+  MEETINGS  = (mtgR.data||[]);
 
   // Task done state — only keep if reset_date is today
   doneTasks = new Set(
@@ -270,6 +272,18 @@ function mkTasks(){
     }
   });
 
+  // Meeting pass: scheduled meetings within 7 days
+  const todayStr=TODAY.toISOString().split('T')[0];
+  MEETINGS.forEach(m=>{
+    const c=CLIENTS.find(x=>x.id===m.client_id);
+    const daysUntil=Math.floor((new Date(m.due_date)-TODAY)/86400000);
+    if(daysUntil>7) return;
+    const label=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
+    t.push({id:'mtg-'+m.id, nm:c?c.name:'Meeting', act:'Meeting'+(c?' — '+c.name:'')+(m.title?' · '+m.title:''),
+      why:label, urg:daysUntil<0?'urgent':daysUntil<=1?'soon':'normal',
+      pri:5, isMtg:true, clientObj:c||null, mtgId:m.id});
+  });
+
   return t.sort((a,b)=>({urgent:0,soon:1,normal:2}[a.urg]||2)-({urgent:0,soon:1,normal:2}[b.urg]||2)||a.pri-b.pri);
 }
 
@@ -323,7 +337,8 @@ function rHome(){
       else if(cam.type==='Seasonal'||cam.type==='Triggered')                           b=BUCKETS[3];
       else if(cam.type==='Follow-Up'||cam.type==='WhatsApp'||cam.type==='Calling'||cam.type==='Personal') b=BUCKETS[0];
       else                                                                              b=BUCKETS[2];
-    } else { b=BUCKETS[0]; }
+    } else if(t.isMtg) { b=BUCKETS[0]; }
+    else { b=BUCKETS[0]; }
     b.tasks.push(t);
   });
 
@@ -531,6 +546,24 @@ async function tick(id, el, e){
     const card=el.parentElement;
     card.classList.add('done');
     await SB.from('task_completions').upsert({task_key:id,reset_date:today},{onConflict:'task_key'});
+    // Auto-log contact for cadence tasks so cadence clock resets permanently
+    if(id.startsWith('wa-')){
+      const cid=id.slice(3);
+      const c=CLIENTS.find(x=>x.id===cid);
+      if(c){ await SB.from('clients').update({last_wa:today}).eq('id',cid); c.wa=today;
+        await SB.from('client_activities').insert({client_id:cid,type:'whatsapp',occurred_at:new Date().toISOString()}); }
+    } else if(id.startsWith('cl-')){
+      const cid=id.slice(3);
+      const c=CLIENTS.find(x=>x.id===cid);
+      if(c){ await SB.from('clients').update({last_call:today}).eq('id',cid); c.call=today;
+        await SB.from('client_activities').insert({client_id:cid,type:'call',occurred_at:new Date().toISOString()}); }
+    } else if(id.startsWith('mtg-')){
+      const mid=id.slice(4);
+      const m=MEETINGS.find(x=>x.id===mid)||null;
+      await SB.from('client_meetings').update({done:true}).eq('id',mid);
+      MEETINGS=MEETINGS.filter(x=>x.id!==mid);
+      if(m?.client_id) await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:new Date().toISOString()});
+    }
     // Update ring counts without re-rendering list
     const tasks=mkTasks(), tot=tasks.length, nd=doneTasks.size;
     const urg=tasks.filter(t=>t.urg==='urgent'&&!doneTasks.has(t.id)).length;
@@ -695,6 +728,47 @@ function rCampaigns(){
       list.appendChild(el);
     });
   });
+
+  // ── Virtual Follow-Up cards (auto-generated from cadence + meetings) ──
+  const waDue=CLIENTS.filter(c=>{
+    const rel=REL_CADENCES[c.relationship];
+    if(!rel||c.relationship==='Archive'||!c.relationship) return false;
+    const wa=daysSince(c.wa), cl=daysSince(c.call);
+    if(rel.cD&&cl>=rel.cD) return false; // call supersedes wa
+    return rel.waD&&wa>=rel.waD;
+  });
+  const callDue=CLIENTS.filter(c=>{
+    const rel=REL_CADENCES[c.relationship];
+    if(!rel||c.relationship==='Archive'||!c.relationship) return false;
+    return rel.cD&&daysSince(c.call)>=rel.cD;
+  });
+  const mtgDue=MEETINGS.filter(m=>Math.floor((new Date(m.due_date)-TODAY)/86400000)<=7);
+
+  const virtualCams=[
+    {label:'WhatsApp', type:'WhatsApp', color:'p-grn', count:waDue.length, desc:'Clients due a WhatsApp based on relationship cadence'},
+    {label:'Calling',  type:'Calling',  color:'p-blu', count:callDue.length, desc:'Clients due a call — supersedes WhatsApp'},
+    {label:'Personal', type:'Personal', color:'p-amb', count:mtgDue.length,  desc:'Scheduled meetings within the next 7 days'},
+  ];
+  if(virtualCams.some(v=>v.count>0)){
+    const vhdr=document.createElement('div');
+    vhdr.className='cam-group-hdr'; vhdr.textContent='Follow-Ups';
+    list.appendChild(vhdr);
+    virtualCams.forEach(v=>{
+      if(!v.count) return;
+      const el=document.createElement('div');
+      el.className='camc gc a'; el.style.animationDelay=(gi++*0.05)+'s';
+      el.innerHTML=`<div class="camc-top">
+        <div class="camc-name">${v.label}</div>
+        <span class="pill ${v.color}">${v.type}</span>
+      </div>
+      <div class="camc-body">${v.desc}</div>
+      <div class="camc-foot">
+        <span class="pill p-grn">${v.count} client${v.count===1?'':'s'}</span>
+        <span class="pill p-gh">Auto-generated</span>
+      </div>`;
+      list.appendChild(el);
+    });
+  }
 }
 
 async function openCampaign(cam){
@@ -1280,6 +1354,10 @@ async function openC(c){
         <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
         <div><div class="act-t">Log Meeting</div><div class="act-s">Record an in-person meeting</div></div>
       </div>
+      <div class="act" onclick="openScheduleMeeting('${c.id}','${c.name.replace(/'/g,"\\'")}')">
+        <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg></div>
+        <div><div class="act-t">Schedule Meeting</div><div class="act-s">Add to Personal follow-up campaign</div></div>
+      </div>
       <div class="act" onclick="openDealModal('${c.id}',null)">
         <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
         <div><div class="act-t">Add Deal</div><div class="act-s">Log a new deal for this client</div></div>
@@ -1327,6 +1405,27 @@ async function logMeeting(c){
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
   showToast('Meeting logged ✓');
+}
+
+let scheduleMeetingClientId=null;
+function openScheduleMeeting(clientId, clientName){
+  scheduleMeetingClientId=clientId;
+  document.getElementById('schedule-meeting-client').textContent=clientName;
+  document.getElementById('schedule-meeting-title').value='';
+  document.getElementById('schedule-meeting-date').value='';
+  openModal('modal-schedule-meeting');
+}
+async function saveScheduleMeeting(){
+  if(!scheduleMeetingClientId) return;
+  const title=document.getElementById('schedule-meeting-title').value.trim();
+  const date=document.getElementById('schedule-meeting-date').value;
+  if(!date){ showToast('Please set a date'); return; }
+  const {data,error}=await SB.from('client_meetings').insert({client_id:scheduleMeetingClientId,title:title||null,due_date:date,done:false}).select().single();
+  if(error){ showToast('Could not save meeting'); return; }
+  MEETINGS.push(data);
+  closeModal('modal-schedule-meeting');
+  rHome();
+  showToast('Meeting scheduled ✓');
 }
 
 // ── PARTNERS ──────────────────────────────────────────────────────
