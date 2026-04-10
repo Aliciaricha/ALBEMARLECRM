@@ -741,7 +741,7 @@ function rCampaigns(){
       </div>
       <div class="camc-body">${cam.notes||''}</div>
       <div class="camc-foot">
-        ${cam.date?`<span class="pill p-gh">${fmtCamDate(cam.date)}</span>`:''}
+        ${cam.date?`<span class="pill p-gh">${cam.date}</span>`:''}
         ${cam.seg?`<span class="pill p-gold">Seg: ${cam.seg}</span>`:''}
         <span class="pill p-grn">${cnt} contacts</span>
       </div>`;
@@ -959,7 +959,7 @@ function renderCampaignProfile(cam){
         <div class="prof-av sq" style="background:rgba(42,95,168,0.09);border-color:rgba(42,95,168,0.22);color:var(--blue)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>
         </div>
-        <div><div class="prof-name">${cam.name}</div><div class="prof-role-l">${cam.type} · ${fmtCamDate(cam.date)}</div></div>
+        <div><div class="prof-name">${cam.name}</div><div class="prof-role-l">${cam.type} · ${cam.date}</div></div>
       </div>
       <div class="prof-pills">
         <span class="pill ${CC[cam.type]||'p-gh'}">${cam.type}</span>
@@ -1875,8 +1875,6 @@ function closeProf(id){
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 function closeModalOut(e,id){ if(e.target===document.getElementById(id)) closeModal(id); }
-function openEditPanel(id){ const el=document.getElementById(id); el.style.display='block'; el.scrollTop=0; requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('open'))); }
-function closeEditPanel(id){ document.getElementById(id).classList.remove('open'); setTimeout(()=>document.getElementById(id).style.display='none',380); }
 function selSeg(el,val){ selSegVal=val; document.querySelectorAll('#seg-chips .seg-chip').forEach(c=>c.classList.toggle('on',c===el)); }
 function selEditSeg(el,val){ editSegVal=val; document.querySelectorAll('#edit-seg-chips .seg-chip').forEach(c=>c.classList.toggle('on',c===el)); }
 
@@ -1910,23 +1908,30 @@ async function saveClient(){
 }
 
 function openEditClient(id){
-  const c=CLIENTS.find(x=>x.id===id); if(!c) return;
-  editClientId=id;
-  document.getElementById('ec-name').value=c.name;
-  document.getElementById('ec-role').value=c.role||'';
-  document.getElementById('ec-city').value=c.city||'';
-  document.getElementById('ec-tier').value=c.tier;
-  document.getElementById('ec-nw').value=c.nw;
-  document.getElementById('ec-nat').value=c.nat||'';
-  document.getElementById('ec-rel').value=c.rel||'Unknown';
-  document.getElementById('ec-rel2').value=c.relationship||'General';
-  const clientInts=(c.int||[]).map(i=>i.toLowerCase());
-  document.querySelectorAll('#ec-int-chips .int-chip, #ec-tag-chips .int-chip').forEach(el=>el.classList.toggle('on',clientInts.includes(el.textContent.toLowerCase())));
-  document.getElementById('ec-notes').value=c.notes||'';
-  document.getElementById('ec-dob').value=c.dob||'';
-  document.getElementById('ec-proxy').value=c.proxyContact||'';
-  document.getElementById('ec-proxy-row').style.display=c.relationship==='Proxy'?'':'none';
-  openEditPanel('ps-edit-client');
+  try{
+    const c=CLIENTS.find(x=>x.id===id); if(!c) return;
+    editClientId=id;
+    const _v=(elId,val)=>{const el=document.getElementById(elId);if(el)el.value=val;};
+    _v('ec-name',c.name);
+    _v('ec-role',c.role||'');
+    _v('ec-city',c.city||'');
+    _v('ec-tier',c.tier);
+    _v('ec-nw',c.nw);
+    _v('ec-nat',c.nat||'');
+    _v('ec-rel',c.rel||'Unknown');
+    _v('ec-rel2',c.relationship||'General');
+    const clientInts=(c.int||[]).map(i=>i.toLowerCase());
+    document.querySelectorAll('#ec-int-chips .int-chip, #ec-tag-chips .int-chip').forEach(el=>el.classList.toggle('on',clientInts.includes(el.textContent.toLowerCase())));
+    _v('ec-notes',c.notes||'');
+    _v('ec-dob',c.dob||'');
+    _v('ec-proxy',c.proxyContact||'');
+    const proxyRow=document.getElementById('ec-proxy-row');
+    if(proxyRow) proxyRow.style.display=c.relationship==='Proxy'?'':'none';
+    openModal('modal-edit-client');
+  }catch(e){
+    console.error('openEditClient error:',e);
+    openModal('modal-edit-client');
+  }
 }
 
 async function saveEditClient(){
@@ -1951,7 +1956,7 @@ async function saveEditClient(){
   // Save dob separately — silently skip if column doesn't exist yet
   if(dobVal!==undefined){ const {error:dobErr}=await SB.from('clients').update({dob:dobVal}).eq('id',editClientId); if(!dobErr) updates.dob=dobVal; }
   Object.assign(c, normaliseClient({...updates, id:editClientId, last_wa:c.wa, last_call:c.call, follow_up_date:c.followUp, has_deal:c.deal, proxy_contact:updates.proxy_contact}));
-  closeEditPanel('ps-edit-client');
+  closeModal('modal-edit-client');
   openC(c);
   if(curTab==='clients') rClients();
   if(curTab==='home') rHome();
@@ -2336,15 +2341,6 @@ function copyWaMsg(){
 function closeWaSheet(e){ if(e.target===document.getElementById('wa-sheet-overlay')) document.getElementById('wa-sheet-overlay').classList.remove('open'); }
 
 // ── UTILS ─────────────────────────────────────────────────────────
-const MONTHS_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function fmtCamDate(d){
-  if(!d||d==='TBC'||d==='Ongoing') return d||'';
-  try{
-    const [y,m,day]=d.split('-').map(Number);
-    return `${day} ${MONTHS_SHORT[m-1]} ${y}`;
-  }catch(e){ return d; }
-}
-
 function updateHomeStats(){
   const tc=DEALS.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
   document.getElementById('qs-pipe').textContent=fm(tc);
