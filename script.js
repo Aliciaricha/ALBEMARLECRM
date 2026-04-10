@@ -751,6 +751,7 @@ function rCampaigns(){
     {label:'Calling',  type:'Calling',  color:'p-blu', count:callDue.length, desc:'Clients due a call — supersedes WhatsApp'},
     {label:'Personal', type:'Personal', color:'p-amb', count:mtgDue.length,  desc:'Scheduled meetings within the next 7 days'},
   ];
+  const virtualData={WhatsApp:waDue, Calling:callDue, Personal:mtgDue.map(m=>({...m,_isMtg:true}))};
   if(virtualCams.some(v=>v.count>0)){
     const vhdr=document.createElement('div');
     vhdr.className='cam-group-hdr'; vhdr.textContent='Follow-Ups';
@@ -759,6 +760,7 @@ function rCampaigns(){
       if(!v.count) return;
       const el=document.createElement('div');
       el.className='camc gc a'; el.style.animationDelay=(gi++*0.05)+'s';
+      el.onclick=()=>openVirtualCampaign(v.type, v.label, v.color, virtualData[v.type]);
       el.innerHTML=`<div class="camc-top">
         <div class="camc-name">${v.label}</div>
         <span class="pill ${v.color}">${v.type}</span>
@@ -771,6 +773,116 @@ function rCampaigns(){
       list.appendChild(el);
     });
   }
+}
+
+function openVirtualCampaign(type, label, colorClass, items){
+  renderVirtualCampaignProfile(type, label, colorClass, items);
+  pushProf('ps-campaign');
+}
+
+function renderVirtualCampaignProfile(type, label, colorClass, items){
+  const iconSvg={
+    WhatsApp:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    Calling:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.6a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 3h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 10.91a16 16 0 0 0 5.61 5.61l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
+    Personal:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  }[type]||'';
+
+  const desc={
+    WhatsApp:'Clients due a WhatsApp based on their relationship cadence. Ticking completes their daily task and resets the cadence clock.',
+    Calling:'Clients due a call. Supersedes WhatsApp — ticking logs the call and resets the clock.',
+    Personal:'Scheduled meetings within the next 7 days.',
+  }[type]||'';
+
+  const rosterHtml=items.length?items.map(item=>{
+    if(type==='Personal'){
+      // item is a meeting record
+      const client=CLIENTS.find(x=>x.id===item.client_id);
+      const name=client?client.name:'Unknown';
+      const daysUntil=Math.floor((new Date(item.due_date)-TODAY)/86400000);
+      const whenLabel=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
+      return `<div class="cam-roster-item vcam-row a" id="vcam-mtg-${item.id}">
+        <div class="cri-av">${ini(name)}</div>
+        <div style="flex:1;min-width:0"><div class="cri-name">${name}</div><div class="cri-sub">${item.title||'Meeting'} · ${whenLabel}</div></div>
+        <div class="cri-check" onclick="tickVirtualMtg('${item.id}','${type}','${label}','${colorClass}',this)">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+      </div>`;
+    } else {
+      // item is a client
+      const taskId=type==='Calling'?'cl-'+item.id:'wa-'+item.id;
+      const isDone=doneTasks.has(taskId);
+      return `<div class="cam-roster-item vcam-row a${isDone?' done':''}">
+        <div class="cri-av">${ini(item.name)}</div>
+        <div style="flex:1;min-width:0"><div class="cri-name">${item.name}</div><div class="cri-sub">${item.role||item.city||''}</div></div>
+        <div class="cri-check${isDone?' on':''}" onclick="tickVirtualClient('${item.id}','${type}','${label}','${colorClass}',this)">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+      </div>`;
+    }
+  }).join('')
+  :'<div style="padding:16px;font-size:13px;color:var(--t3);font-style:italic">All done — nothing pending.</div>';
+
+  document.getElementById('ps-campaign-body').innerHTML=`
+    <div class="prof-back-row">
+      <div class="prof-back" onclick="closeProf('ps-campaign')">
+        <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 1L1 7l6 6"/></svg><span>Campaigns</span>
+      </div>
+    </div>
+    <div class="prof-hero">
+      <div class="prof-av-row">
+        <div class="prof-av sq" style="background:rgba(138,109,62,0.09);border-color:var(--gold-border);color:var(--gold)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">${iconSvg}</svg>
+        </div>
+        <div><div class="prof-name">${label}</div><div class="prof-role-l">Auto-generated · Follow-Up</div></div>
+      </div>
+      <div class="prof-pills">
+        <span class="pill ${colorClass}">${type}</span>
+        <span class="pill p-grn">${items.length} pending</span>
+      </div>
+    </div>
+    <div class="prof-sec"><div class="sec-notes" style="font-size:12px">${desc}</div></div>
+    <div class="prof-sec">
+      <div class="sec-lbl">Pending · ${items.length}</div>
+      ${rosterHtml}
+    </div>
+    <div style="height:36px"></div>`;
+}
+
+async function tickVirtualClient(clientId, type, label, colorClass, el){
+  const c=CLIENTS.find(x=>x.id===clientId); if(!c) return;
+  el.classList.add('on');
+  el.closest('.cam-roster-item').classList.add('done');
+  if(type==='Calling'){
+    await logCall(c);
+  } else {
+    await logWa(c);
+  }
+  // Re-derive list and re-render
+  const waDue=CLIENTS.filter(cl=>{
+    const rel=REL_CADENCES[cl.relationship];
+    if(!rel||cl.relationship==='Archive'||!cl.relationship) return false;
+    if(rel.cD&&daysSince(cl.call)>=rel.cD) return false;
+    return rel.waD&&daysSince(cl.wa)>=rel.waD;
+  });
+  const callDue=CLIENTS.filter(cl=>{
+    const rel=REL_CADENCES[cl.relationship];
+    if(!rel||cl.relationship==='Archive'||!cl.relationship) return false;
+    return rel.cD&&daysSince(cl.call)>=rel.cD;
+  });
+  const newItems=type==='Calling'?callDue:waDue;
+  setTimeout(()=>renderVirtualCampaignProfile(type,label,colorClass,newItems),500);
+}
+
+async function tickVirtualMtg(mtgId, type, label, colorClass, el){
+  el.classList.add('on');
+  el.closest('.cam-roster-item').classList.add('done');
+  const m=MEETINGS.find(x=>x.id===mtgId);
+  await SB.from('client_meetings').update({done:true}).eq('id',mtgId);
+  MEETINGS=MEETINGS.filter(x=>x.id!==mtgId);
+  if(m?.client_id) await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:new Date().toISOString()});
+  rHome();
+  const mtgDue=MEETINGS.filter(x=>Math.floor((new Date(x.due_date)-TODAY)/86400000)<=7);
+  setTimeout(()=>renderVirtualCampaignProfile(type,label,colorClass,mtgDue),500);
 }
 
 async function openCampaign(cam){
@@ -1449,7 +1561,7 @@ async function saveScheduleMeeting(){
   const date=document.getElementById('schedule-meeting-date').value;
   if(!date){ showToast('Please set a date'); return; }
   const {data,error}=await SB.from('client_meetings').insert({client_id:scheduleMeetingClientId,title:title||null,due_date:date,done:false}).select().single();
-  if(error){ showToast('Could not save meeting'); return; }
+  if(error){ console.error('client_meetings error:',error); showToast('Could not save — run SQL in Supabase'); return; }
   MEETINGS.push(data);
   closeModal('modal-schedule-meeting');
   rHome();
