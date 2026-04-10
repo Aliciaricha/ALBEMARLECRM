@@ -94,14 +94,16 @@ async function loadAll(){
 }
 
 function normaliseClient(r){
+  const interests=r.interests||[];
   return {
     id: r.id, name: r.name, role: r.position||'', nat: r.nationality||'',
     city: r.city||'', tier: r.tier||'Active', nw: r.net_worth||'HNWI',
-    rel: r.religion||'Unknown', int: r.interests||[], notes: r.notes||'',
+    rel: r.religion||'Unknown', int: interests, notes: r.notes||'',
     wa: r.last_wa||null, call: r.last_call||null,
     followUp: r.follow_up_date||null, deal: r.has_deal||false,
     relationship: r.relationship||'',
     proxyContact: r.proxy_contact||'',
+    vip: interests.includes('VIP'),
   };
 }
 function normalisePartner(r){
@@ -1052,15 +1054,15 @@ function rClients(){
 
   // Stats
   const total=CLIENTS.length;
+  const vips=CLIENTS.filter(c=>c.vip).length;
   const billionaires=CLIENTS.filter(c=>c.nw==='Billionaire').length;
   const centimillionaires=CLIENTS.filter(c=>c.nw==='Centimillionaire').length;
-  const activeRels=CLIENTS.filter(c=>c.relationship&&c.relationship!=='Archive').length;
   const statsEl=document.getElementById('cli-stats');
   if(statsEl) statsEl.innerHTML=`
     <div class="cli-stat"><div class="cli-stat-n">${total}</div><div class="cli-stat-l">Total</div></div>
-    <div class="cli-stat"><div class="cli-stat-n g">${billionaires}</div><div class="cli-stat-l">Billionaires</div></div>
+    <div class="cli-stat"><div class="cli-stat-n g">${vips}</div><div class="cli-stat-l">VIPs</div></div>
+    <div class="cli-stat"><div class="cli-stat-n">${billionaires}</div><div class="cli-stat-l">Billionaires</div></div>
     <div class="cli-stat"><div class="cli-stat-n">${centimillionaires}</div><div class="cli-stat-l">Centimilli.</div></div>
-    <div class="cli-stat"><div class="cli-stat-n">${activeRels}</div><div class="cli-stat-l">Active</div></div>
   `;
 
   // Active filter pills
@@ -1081,6 +1083,8 @@ function rClients(){
 
   const NW_ORDER=['Billionaire','Centimillionaire','HNWI'];
   list.sort((a,b)=>{
+    // VIPs first, then by NW, then A-Z
+    if(a.vip!==b.vip) return a.vip?-1:1;
     const ai=NW_ORDER.includes(a.nw)?NW_ORDER.indexOf(a.nw):99;
     const bi=NW_ORDER.includes(b.nw)?NW_ORDER.indexOf(b.nw):99;
     if(ai!==bi) return ai-bi;
@@ -1088,15 +1092,18 @@ function rClients(){
   });
 
   const el=document.getElementById('cli-list'); el.innerHTML='';
-  const showNwHeaders=!q&&!clientFilters.nw;
-  let lastNw=null;
+  const showNwHeaders=!q&&!clientFilters.nw&&!clientFilters.tag;
+  let lastGroup=null; // 'VIP' or NW value
   let idx=0;
   list.forEach(c=>{
-    if(showNwHeaders&&c.nw!==lastNw){
-      lastNw=c.nw;
-      const h=document.createElement('div');
-      h.className='rec-cat-header'; h.textContent=c.nw;
-      el.appendChild(h);
+    if(showNwHeaders){
+      const group=c.vip?'VIP':c.nw;
+      if(group!==lastGroup){
+        lastGroup=group;
+        const h=document.createElement('div');
+        h.className='rec-cat-header'; h.textContent=group;
+        el.appendChild(h);
+      }
     }
     const rel=REL_CADENCES[c.relationship];
     const wa=daysSince(c.wa), cl=daysSince(c.call);
@@ -1105,7 +1112,8 @@ function rClients(){
     div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
     div.onclick=()=>openC(c);
     const cardTag=c.deal?'<span class="pill p-gold" style="font-size:9px;margin-top:4px;align-self:flex-start">Deal</span>':(c.int||[]).includes('High Potential')?'<span class="pill" style="font-size:9px;margin-top:4px;align-self:flex-start;background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':'';
-    div.innerHTML=`<div class="pc-av">${ini(c.name)}</div>
+    const vipStar=c.vip?`<div class="pc-vip-star"><svg width="11" height="11" viewBox="0 0 24 24" fill="var(--gold)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>`:'';
+    div.innerHTML=`${vipStar}<div class="pc-av">${ini(c.name)}</div>
   <div class="pc-info">
     <div class="pc-name">${c.name}</div>
     <div class="pc-sub">${c.role||c.city||''}</div>
@@ -1362,6 +1370,10 @@ async function openC(c){
         <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
         <div><div class="act-t">Add Deal</div><div class="act-s">Log a new deal for this client</div></div>
       </div>
+      <div class="act" onclick="toggleVip('${c.id}')">
+        <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="${c.vip?'var(--gold)':'none'}" stroke="var(--gold)" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+        <div><div class="act-t" style="${c.vip?'color:var(--gold)':''}">${c.vip?'Remove VIP':'Mark as VIP'}</div><div class="act-s">${c.vip?'Remove VIP status from this client':'Pin to top of client list with star'}</div></div>
+      </div>
     </div>
     <div style="height:36px"></div>`;
   pushProf('ps-client');
@@ -1405,6 +1417,22 @@ async function logMeeting(c){
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
   showToast('Meeting logged ✓');
+}
+
+async function toggleVip(clientId){
+  const c=CLIENTS.find(x=>x.id===clientId); if(!c) return;
+  if(c.vip){
+    c.int=c.int.filter(i=>i!=='VIP');
+    c.vip=false;
+  } else {
+    c.int=[...c.int,'VIP'];
+    c.vip=true;
+  }
+  await SB.from('clients').update({interests:c.int}).eq('id',clientId);
+  rClients();
+  // Refresh open profile
+  openC(c);
+  showToast(c.vip?'VIP status added ✓':'VIP status removed');
 }
 
 let scheduleMeetingClientId=null;
