@@ -1448,6 +1448,18 @@ async function saveEditActivity(){
   showToast('Activity updated ✓');
 }
 
+async function deleteActivity(){
+  if(!editActivityId) return;
+  const {error}=await SB.from('client_activities').delete().eq('id',editActivityId);
+  if(error){ showToast('Could not delete: '+error.message); return; }
+  CLIENT_ACTIVITIES=CLIENT_ACTIVITIES.filter(a=>a.id!==editActivityId);
+  closeModal('modal-edit-activity');
+  const tlInner=document.getElementById('atl-inner');
+  if(tlInner) tlInner.innerHTML=renderActivityTimeline(editActivityClientId);
+  rHome();
+  showToast('Activity deleted');
+}
+
 
 
 
