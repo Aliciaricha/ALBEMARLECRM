@@ -184,8 +184,8 @@ function clientMatchesSeg(c, seg){
 
 function getSegmentMatchedClients(cam){
   let filtered=CLIENTS;
-  const isBirthday=cam.occ&&cam.occ.toLowerCase().includes('birthday');
-  // Birthday campaigns: only include clients who have a dob set
+  // Birthday campaigns: check name OR occasion field for 'birthday'
+  const isBirthday=(cam.occ&&cam.occ.toLowerCase().includes('birthday'))||(cam.name&&cam.name.toLowerCase().includes('birthday'));
   if(isBirthday){ filtered=filtered.filter(c=>!!c.dob); }
   else if(cam.occ && cam.occ!==''){
     const occs=cam.occ.split('/').map(o=>o.trim().toLowerCase());
@@ -1945,6 +1945,8 @@ function openEditClient(id){
 async function saveEditClient(){
   const c=CLIENTS.find(x=>x.id===editClientId); if(!c) return;
   const ints=[...document.querySelectorAll('#ec-int-chips .int-chip.on, #ec-tag-chips .int-chip.on')].map(el=>el.textContent);
+  // VIP is toggled via the star button, not the edit form — always preserve it
+  if(c.vip && !ints.includes('VIP')) ints.push('VIP');
   const dobVal=document.getElementById('ec-dob')?.value||null;
   const updates={
     name:document.getElementById('ec-name').value.trim()||c.name,
