@@ -1908,23 +1908,30 @@ async function saveClient(){
 }
 
 function openEditClient(id){
-  const c=CLIENTS.find(x=>x.id===id); if(!c) return;
-  editClientId=id;
-  document.getElementById('ec-name').value=c.name;
-  document.getElementById('ec-role').value=c.role||'';
-  document.getElementById('ec-city').value=c.city||'';
-  document.getElementById('ec-tier').value=c.tier;
-  document.getElementById('ec-nw').value=c.nw;
-  document.getElementById('ec-nat').value=c.nat||'';
-  document.getElementById('ec-rel').value=c.rel||'Unknown';
-  document.getElementById('ec-rel2').value=c.relationship||'General';
-  const clientInts=(c.int||[]).map(i=>i.toLowerCase());
-  document.querySelectorAll('#ec-int-chips .int-chip, #ec-tag-chips .int-chip').forEach(el=>el.classList.toggle('on',clientInts.includes(el.textContent.toLowerCase())));
-  document.getElementById('ec-notes').value=c.notes||'';
-  document.getElementById('ec-dob').value=c.dob||'';
-  document.getElementById('ec-proxy').value=c.proxyContact||'';
-  document.getElementById('ec-proxy-row').style.display=c.relationship==='Proxy'?'':'none';
-  openModal('modal-edit-client');
+  try{
+    const c=CLIENTS.find(x=>x.id===id); if(!c) return;
+    editClientId=id;
+    const _v=(elId,val)=>{const el=document.getElementById(elId);if(el)el.value=val;};
+    _v('ec-name',c.name);
+    _v('ec-role',c.role||'');
+    _v('ec-city',c.city||'');
+    _v('ec-tier',c.tier);
+    _v('ec-nw',c.nw);
+    _v('ec-nat',c.nat||'');
+    _v('ec-rel',c.rel||'Unknown');
+    _v('ec-rel2',c.relationship||'General');
+    const clientInts=(c.int||[]).map(i=>i.toLowerCase());
+    document.querySelectorAll('#ec-int-chips .int-chip, #ec-tag-chips .int-chip').forEach(el=>el.classList.toggle('on',clientInts.includes(el.textContent.toLowerCase())));
+    _v('ec-notes',c.notes||'');
+    _v('ec-dob',c.dob||'');
+    _v('ec-proxy',c.proxyContact||'');
+    const proxyRow=document.getElementById('ec-proxy-row');
+    if(proxyRow) proxyRow.style.display=c.relationship==='Proxy'?'':'none';
+    openModal('modal-edit-client');
+  }catch(e){
+    console.error('openEditClient error:',e);
+    openModal('modal-edit-client');
+  }
 }
 
 async function saveEditClient(){
