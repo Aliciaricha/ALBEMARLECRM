@@ -104,6 +104,7 @@ function normaliseClient(r){
     relationship: r.relationship||'',
     proxyContact: r.proxy_contact||'',
     vip: interests.includes('VIP'),
+    dob: r.dob||null,
   };
 }
 function normalisePartner(r){
@@ -183,7 +184,10 @@ function clientMatchesSeg(c, seg){
 
 function getSegmentMatchedClients(cam){
   let filtered=CLIENTS;
-  if(cam.occ && cam.occ!==''){
+  const isBirthday=cam.occ&&cam.occ.toLowerCase().includes('birthday');
+  // Birthday campaigns: only include clients who have a dob set
+  if(isBirthday){ filtered=filtered.filter(c=>!!c.dob); }
+  else if(cam.occ && cam.occ!==''){
     const occs=cam.occ.split('/').map(o=>o.trim().toLowerCase());
     filtered=filtered.filter(c=>{
       const relL=(c.rel||'').toLowerCase();
@@ -244,7 +248,8 @@ function mkTasks(){
       return;
     }
     clients.forEach(c=>{
-      camCoveredIds.add(c.id);
+      // Only follow-up type campaigns suppress cadence WhatsApp/Call tasks
+      if(['Follow-Up','WhatsApp','Calling','Personal'].includes(cam.type)) camCoveredIds.add(c.id);
       const rel=REL_CADENCES[c.relationship];
       t.push({id:'cam-'+cam.id+'-'+c.id, nm:c.name, act:cam.name+' — '+c.name,
         why:camWhy, urg:'soon', pri:(rel?rel.p*10:20)+2, isCam:true, camId:cam.id, clientObj:c});
@@ -1506,6 +1511,7 @@ async function openC(c){
       <div class="sec-row"><div class="sec-k">Last WhatsApp</div><div class="sec-v ${waOv?'ov':wa!==9999?'ok':''}">${waStr}${waOv?' — Overdue':''}</div></div>
       <div class="sec-row"><div class="sec-k">Last Phone Call</div><div class="sec-v ${clOv?'ov':cl!==9999?'ok':''}">${clStr}${clOv?' — Overdue':''}</div></div>
       ${c.followUp?`<div class="sec-row"><div class="sec-k">Follow-up date</div><div class="sec-v">${c.followUp}</div></div>`:''}
+      ${c.dob?`<div class="sec-row"><div class="sec-k">Birthday</div><div class="sec-v">${new Date(c.dob+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long'})}</div></div>`:''}
     </div>
     ${c.int.length?`<div class="prof-sec"><div class="sec-lbl">Interests & Segments</div><div class="itags">${c.int.map(x=>`<span class="pill p-gh">${x}</span>`).join('')}</div></div>`:''}
     ${camHtml?`<div class="prof-sec"><div class="sec-lbl">Active Campaigns</div><div class="itags" style="margin-top:4px">${camHtml}</div></div>`:''}
@@ -1878,13 +1884,14 @@ async function saveClient(){
     proxy_contact: document.getElementById('nc-proxy').value.trim()||null,
     interests:ints,
     notes:document.getElementById('nc-notes').value.trim(),
+    dob:document.getElementById('nc-dob').value||null,
     sort_order: CLIENTS.length
   };
   const {data,error}=await SB.from('clients').insert(row).select().single();
   if(error){ alert('Error saving: '+error.message); return; }
   CLIENTS.push(normaliseClient(data));
   closeModal('modal-client');
-  ['nc-name','nc-role','nc-city','nc-nat','nc-notes'].forEach(id=>document.getElementById(id).value='');
+  ['nc-name','nc-role','nc-city','nc-nat','nc-notes','nc-dob'].forEach(id=>document.getElementById(id).value='');
   document.querySelectorAll('#nc-int-chips .int-chip, #nc-tag-chips .int-chip').forEach(el=>el.classList.remove('on'));
   rClients(); updateHomeStats(); showToast('Client added ✓');
 }
@@ -1903,6 +1910,7 @@ function openEditClient(id){
   const clientInts=(c.int||[]).map(i=>i.toLowerCase());
   document.querySelectorAll('#ec-int-chips .int-chip, #ec-tag-chips .int-chip').forEach(el=>el.classList.toggle('on',clientInts.includes(el.textContent.toLowerCase())));
   document.getElementById('ec-notes').value=c.notes||'';
+  document.getElementById('ec-dob').value=c.dob||'';
   document.getElementById('ec-proxy').value=c.proxyContact||'';
   document.getElementById('ec-proxy-row').style.display=c.relationship==='Proxy'?'':'none';
   openEditPanel('ps-edit-client');
@@ -1923,6 +1931,7 @@ async function saveEditClient(){
     proxy_contact: document.getElementById('ec-proxy').value.trim()||null,
     interests:ints,
     notes:document.getElementById('ec-notes').value.trim(),
+    dob:document.getElementById('ec-dob').value||null,
   };
   const {error}=await SB.from('clients').update(updates).eq('id',editClientId);
   if(error){ console.error('saveEditClient error:',error); alert('Error: '+error.message); return; }
