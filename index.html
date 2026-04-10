@@ -8,7 +8,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="stylesheet" href="styles.css?v=20260410b">
+<link rel="stylesheet" href="styles.css?v=20260410c">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -574,7 +574,25 @@
     </div>
     <div class="form-footer">
       <button class="form-submit" id="deal-submit-btn" onclick="saveDeal()">Add Deal</button>
+      <button class="form-danger" id="deal-delete-btn" onclick="deleteDeal()" style="display:none">Delete Deal</button>
       <div class="form-cancel" onclick="closeModal('modal-deal')">Cancel</div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT DEAL TASK -->
+<div class="modal-overlay" id="modal-edit-deal-task" onclick="closeModalOut(event,'modal-edit-deal-task')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Edit Task</div>
+    <div class="form-body">
+      <div class="form-field"><label>Task</label><input type="text" id="edt-title" placeholder="Task title…"></div>
+      <div class="form-field"><label>Due Date (optional)</label><input type="date" id="edt-due"></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveEditDealTask()">Save Changes</button>
+      <button class="form-danger" onclick="deleteDealTask()">Delete Task</button>
+      <div class="form-cancel" onclick="closeModal('modal-edit-deal-task')">Cancel</div>
     </div>
   </div>
 </div>
@@ -777,6 +795,6 @@
   </div>
 </div>
 
-<script src="script.js?v=20260410b" defer></script>
+<script src="script.js?v=20260410c" defer></script>
 </body>
 </html>

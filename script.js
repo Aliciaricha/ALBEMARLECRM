@@ -675,7 +675,7 @@ async function renderDealTasksTimeline(){
           ${sub?`<div style="font-size:11px;color:var(--t3);margin-top:2px">${sub}</div>`:''}
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-          <div style="font-size:11px;color:var(--t3);cursor:pointer;padding:4px 6px;border-radius:6px;border:0.5px solid var(--brd)" onclick="event.stopPropagation();openRescheduleTask('${t.id}','${(t.title||'').replace(/'/g,"\\'")}','${t.due_date||''}')">Reschedule</div>
+          <div class="atl-edit" style="margin-top:0" onclick="event.stopPropagation();openEditDealTask('${t.id}','${(t.title||'').replace(/'/g,"\\'")}','${t.due_date||''}',true)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
           <div class="chk" onclick="event.stopPropagation();tickDealTaskTimeline('${t.id}',this.closest('.act'))"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>
         </div>`;
       card.appendChild(row);
@@ -2158,6 +2158,7 @@ function openDealModal(presetClientId, editDealId){
   const tasksSection=document.getElementById('nd-tasks-section');
   const taskForm=document.getElementById('nd-task-form');
 
+  const delBtn=document.getElementById('deal-delete-btn');
   if(editDealId){
     const d=DEALS.find(x=>x.id===editDealId);
     if(d){
@@ -2172,6 +2173,7 @@ function openDealModal(presetClientId, editDealId){
     }
     tasksSection.style.display='block';
     taskForm.style.display='none';
+    if(delBtn) delBtn.style.display='block';
     loadDealTasks(editDealId);
   } else {
     document.getElementById('deal-modal-title').textContent='New Deal';
@@ -2179,6 +2181,7 @@ function openDealModal(presetClientId, editDealId){
     ['nd-value','nd-notes'].forEach(id=>document.getElementById(id).value='');
     tasksSection.style.display='none';
     taskForm.style.display='none';
+    if(delBtn) delBtn.style.display='none';
     dealTasks=[];
   }
   openModal('modal-deal');
@@ -2193,6 +2196,8 @@ async function loadDealTasks(dealId){
   dealTasks=data||[];
   renderDealTasks();
 }
+
+let editingDealTaskId=null;
 
 function renderDealTasks(){
   const list=document.getElementById('nd-task-list'); if(!list) return;
@@ -2214,13 +2219,61 @@ function renderDealTasks(){
 
     const info=document.createElement('div');
     info.className='deal-task-info';
-    info.innerHTML=`<div class="deal-task-title-txt">${t.title}</div>${t.due_date?`<div class="deal-task-due">${t.due_date}</div>`:''}`;
+    info.innerHTML=`<div class="deal-task-title-txt">${t.title}</div>${t.due_date?`<div class="deal-task-due">${fmtDealTaskDate(t.due_date)}</div>`:''}`;
+
+    const pencil=document.createElement('div');
+    pencil.className='atl-edit';
+    pencil.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+    pencil.onclick=(e)=>{ e.stopPropagation(); openEditDealTask(t.id, t.title, t.due_date||'', false); };
 
     item.appendChild(chk);
     item.appendChild(info);
+    item.appendChild(pencil);
     list.appendChild(item);
   });
 }
+
+function fmtDealTaskDate(d){
+  if(!d) return '';
+  const dt=new Date(d+'T12:00:00');
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
+}
+
+function openEditDealTask(id, title, dueDate, fromTimeline){
+  editingDealTaskId=id;
+  editingDealTaskFromTimeline=!!fromTimeline;
+  document.getElementById('edt-title').value=title||'';
+  document.getElementById('edt-due').value=dueDate||'';
+  openModal('modal-edit-deal-task');
+}
+
+async function saveEditDealTask(){
+  if(!editingDealTaskId) return;
+  const title=document.getElementById('edt-title').value.trim(); if(!title) return;
+  const due=document.getElementById('edt-due').value||null;
+  const {error}=await SB.from('deal_tasks').update({title,due_date:due}).eq('id',editingDealTaskId);
+  if(error){ showToast('Could not save task'); return; }
+  const t=dealTasks.find(x=>x.id===editingDealTaskId);
+  if(t){ t.title=title; t.due_date=due; }
+  closeModal('modal-edit-deal-task');
+  renderDealTasks();
+  if(editingDealTaskFromTimeline) renderDealTasksTimeline();
+  showToast('Task updated ✓');
+}
+
+async function deleteDealTask(){
+  if(!editingDealTaskId) return;
+  const {error}=await SB.from('deal_tasks').delete().eq('id',editingDealTaskId);
+  if(error){ showToast('Could not delete task'); return; }
+  dealTasks=dealTasks.filter(x=>x.id!==editingDealTaskId);
+  closeModal('modal-edit-deal-task');
+  renderDealTasks();
+  if(editingDealTaskFromTimeline) renderDealTasksTimeline();
+  showToast('Task deleted');
+}
+
+let editingDealTaskFromTimeline=false;
 
 
 
@@ -2283,6 +2336,19 @@ async function saveDeal(){
   closeModal('modal-deal');
   if(curTab==='deals') rDeals(); if(curTab==='home') rHome();
   updateHomeStats();
+}
+
+async function deleteDeal(){
+  if(!editingDealId) return;
+  // Delete all tasks for this deal, then the deal itself
+  await SB.from('deal_tasks').delete().eq('deal_id',editingDealId);
+  const {error}=await SB.from('deals').delete().eq('id',editingDealId);
+  if(error){ showToast('Could not delete deal'); return; }
+  DEALS=DEALS.filter(x=>x.id!==editingDealId);
+  closeModal('modal-deal');
+  showToast('Deal deleted');
+  if(curTab==='deals') rDeals();
+  rHome(); updateHomeStats();
 }
 
 // ── WHATSAPP ──────────────────────────────────────────────────────
