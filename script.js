@@ -689,6 +689,19 @@ async function tickDealTaskTimeline(id,card){
 function rCampaigns(){
   const list=document.getElementById('cam-list'); list.innerHTML='';
 
+  // Stats
+  const total=CAMPAIGNS.length;
+  const followUps=CAMPAIGNS.filter(c=>['Follow-Up','WhatsApp','Calling','Personal'].includes(c.type)).length;
+  const mandates=CAMPAIGNS.filter(c=>c.type==='Mandate').length;
+  const luxury=CAMPAIGNS.filter(c=>['Event','Ongoing','Triggered','Seasonal'].includes(c.type)).length;
+  const statsEl=document.getElementById('cam-stats');
+  if(statsEl) statsEl.innerHTML=`
+    <div class="cli-stat"><div class="cli-stat-n">${total}</div><div class="cli-stat-l">Total</div></div>
+    <div class="cli-stat"><div class="cli-stat-n g">${followUps}</div><div class="cli-stat-l">Follow-Ups</div></div>
+    <div class="cli-stat"><div class="cli-stat-n">${mandates}</div><div class="cli-stat-l">Mandates</div></div>
+    <div class="cli-stat"><div class="cli-stat-n">${luxury}</div><div class="cli-stat-l">Luxury</div></div>
+  `;
+
   const GROUPS=[
     {key:'mandates',  label:'Mandates',             cams:[]},
     {key:'luxury',    label:'Luxury',               cams:[]},
