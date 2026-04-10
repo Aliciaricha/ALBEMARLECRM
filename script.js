@@ -1872,8 +1872,8 @@ function closeProf(id){
 }
 
 // ── MODALS ────────────────────────────────────────────────────────
-function openModal(id){ document.getElementById(id).classList.add('open'); }
-function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function openModal(id){ const el=document.getElementById(id); if(el) el.classList.add('open'); else console.error('openModal: element not found:',id); }
+function closeModal(id){ const el=document.getElementById(id); if(el) el.classList.remove('open'); }
 function closeModalOut(e,id){ if(e.target===document.getElementById(id)) closeModal(id); }
 function selSeg(el,val){ selSegVal=val; document.querySelectorAll('#seg-chips .seg-chip').forEach(c=>c.classList.toggle('on',c===el)); }
 function selEditSeg(el,val){ editSegVal=val; document.querySelectorAll('#edit-seg-chips .seg-chip').forEach(c=>c.classList.toggle('on',c===el)); }
