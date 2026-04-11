@@ -16,15 +16,15 @@ const TIERS = {
 };
 const TC = {Top:'#8a6d3e', Active:'#2a5fa8', Warm:'#b87020', Sleeper:'#8a93a2'};
 const SC = {Confirmed:'p-grn', Negotiation:'p-gold', Tentative:'p-amb', Waiting:'p-gh'};
-const CC = {'Follow-Up':'p-blu', WhatsApp:'p-grn', Calling:'p-blu', Personal:'p-amb', Seasonal:'p-amb', Mandate:'p-gold', Event:'p-blu', Ongoing:'p-grn', Triggered:'p-gh'};
+const CC = {'Follow-Up':'p-blu', Seasonal:'p-amb', Mandate:'p-gold', Event:'p-blu', Ongoing:'p-grn', Triggered:'p-gh'};
 
 // ── RELATIONSHIP CADENCES ─────────────────────────────────────────
 const DEFAULT_REL_CADENCES = {
-  Personal: {waD:14, cD:30,  label:'Personal', p:1},
-  Close:    {waD:28, cD:null,label:'Close',    p:2},
-  General:  {waD:28, cD:null,label:'General',  p:3},
-  Proxy:    {waD:56, cD:null,label:'Proxy',    p:4},
-  Archive:  {waD:84, cD:null,label:'Archive',  p:5},
+  Personal: {waD:14, cD:30, mD:60, label:'Personal', p:1},
+  Close:    {waD:28, cD:null,      label:'Close',    p:2},
+  General:  {waD:28, cD:null,      label:'General',  p:3},
+  Proxy:    {waD:56, cD:null,      label:'Proxy',    p:4},
+  Archive:  {waD:84, cD:null,      label:'Archive',  p:5},
 };
 let REL_CADENCES = {};
 function loadRelCadences(){
@@ -35,7 +35,7 @@ function loadRelCadences(){
 function saveRelCadences(){ localStorage.setItem('rel_cadences',JSON.stringify(REL_CADENCES)); }
 
 // ── STATE ─────────────────────────────────────────────────────────
-let CLIENTS=[], PARTNERS=[], DEALS=[], CAMPAIGNS=[], RECS=[], MEETINGS=[];
+let CLIENTS=[], PARTNERS=[], DEALS=[], CAMPAIGNS=[], RECS=[];
 let doneTasks = new Set(); // task_key set from DB
 let cF='All', curTab='home';
 let relF='All'; // KEEP for backward compat but no longer used in UI
@@ -66,14 +66,13 @@ function showToast(msg){ const t=document.getElementById('toast'); t.textContent
 async function loadAll(){
   const today = new Date().toISOString().split('T')[0];
 
-  const [cR, pR, dR, camR, recR, taskR, mtgR] = await Promise.all([
+  const [cR, pR, dR, camR, recR, taskR] = await Promise.all([
     SB.from('clients').select('*').order('sort_order'),
     SB.from('partners').select('*').order('sort_order'),
     SB.from('deals').select('*').order('created_at'),
     SB.from('campaigns').select('*').order('sort_order'),
     SB.from('recommendations').select('*').order('category').order('sort_order'),
     SB.from('task_completions').select('task_key,reset_date'),
-    SB.from('client_meetings').select('*').eq('done',false).order('due_date'),
   ]);
 
   CLIENTS   = (cR.data||[]).map(normaliseClient);
@@ -81,7 +80,6 @@ async function loadAll(){
   DEALS     = (dR.data||[]).map(normaliseDeal);
   CAMPAIGNS = (camR.data||[]).map(normaliseCampaign);
   RECS      = recR.data||[];
-  MEETINGS  = (mtgR.data||[]);
 
   // Task done state — only keep if reset_date is today
   doneTasks = new Set(
@@ -94,17 +92,14 @@ async function loadAll(){
 }
 
 function normaliseClient(r){
-  const interests=r.interests||[];
   return {
     id: r.id, name: r.name, role: r.position||'', nat: r.nationality||'',
     city: r.city||'', tier: r.tier||'Active', nw: r.net_worth||'HNWI',
-    rel: r.religion||'Unknown', int: interests, notes: r.notes||'',
+    rel: r.religion||'Unknown', int: r.interests||[], notes: r.notes||'',
     wa: r.last_wa||null, call: r.last_call||null, meeting: r.last_meeting||null,
     followUp: r.follow_up_date||null, deal: r.has_deal||false,
     relationship: r.relationship||'',
     proxyContact: r.proxy_contact||'',
-    vip: interests.includes('VIP'),
-    dob: r.dob||null,
     dormant: r.dormant||false,
   };
 }
@@ -117,25 +112,11 @@ function normalisePartner(r){
     wa: r.last_wa||null, call: r.last_call||null,
   };
 }
-function parsePct(str){
-  if(!str) return null;
-  const m=String(str).match(/(\d+(?:\.\d+)?)/);
-  return m?parseFloat(m[1]):null;
-}
-function calcDealPct(partnerName){
-  const p=PARTNERS.find(x=>x.name===partnerName);
-  if(!p) return 0;
-  const ref=parsePct(p.fee), biz=parsePct(p.bizFee);
-  if(ref&&biz) return (ref*biz)/100;
-  if(ref) return ref;
-  return 0;
-}
 function normaliseDeal(r){
-  const pct=calcDealPct(r.partner)||Number(r.commission_rate)||0;
   return {
     id: r.id, clientId: r.client_id, pt: r.partner||'',
     cat: r.category||'Real Estate', v: Number(r.spend)||0,
-    pct, s: r.status||'Waiting', n: r.notes||'',
+    pct: Number(r.commission_rate)||0, s: r.status||'Waiting', n: r.notes||'',
   };
 }
 function normaliseCampaign(r){
@@ -185,10 +166,7 @@ function clientMatchesSeg(c, seg){
 
 function getSegmentMatchedClients(cam){
   let filtered=CLIENTS;
-  // Birthday campaigns: check name OR occasion field for 'birthday'
-  const isBirthday=(cam.occ&&cam.occ.toLowerCase().includes('birthday'))||(cam.name&&cam.name.toLowerCase().includes('birthday'));
-  if(isBirthday){ filtered=filtered.filter(c=>!!c.dob); }
-  else if(cam.occ && cam.occ!==''){
+  if(cam.occ && cam.occ!==''){
     const occs=cam.occ.split('/').map(o=>o.trim().toLowerCase());
     filtered=filtered.filter(c=>{
       const relL=(c.rel||'').toLowerCase();
@@ -249,8 +227,7 @@ function mkTasks(){
       return;
     }
     clients.forEach(c=>{
-      // Only follow-up type campaigns suppress cadence WhatsApp/Call tasks
-      if(['Follow-Up','WhatsApp','Calling','Personal'].includes(cam.type)) camCoveredIds.add(c.id);
+      camCoveredIds.add(c.id);
       const rel=REL_CADENCES[c.relationship];
       t.push({id:'cam-'+cam.id+'-'+c.id, nm:c.name, act:cam.name+' — '+c.name,
         why:camWhy, urg:'soon', pri:(rel?rel.p*10:20)+2, isCam:true, camId:cam.id, clientObj:c});
@@ -280,16 +257,16 @@ function mkTasks(){
     }
   });
 
-  // Meeting pass: scheduled meetings within 7 days
-  const todayStr=TODAY.toISOString().split('T')[0];
-  MEETINGS.forEach(m=>{
-    const c=CLIENTS.find(x=>x.id===m.client_id);
-    const daysUntil=Math.floor((new Date(m.due_date)-TODAY)/86400000);
-    if(daysUntil>7) return;
-    const label=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
-    t.push({id:'mtg-'+m.id, nm:c?c.name:'Meeting', act:'Personal meeting with '+(c?c.name:'Unknown')+(m.title?' · '+m.title:''),
-      why:label, urg:daysUntil<0?'urgent':daysUntil<=1?'soon':'normal',
-      pri:5, isMtg:true, clientObj:c||null, mtgId:m.id});
+  // Meeting pass: clients whose relationship cadence has a meeting interval (mD)
+  CLIENTS.forEach(c=>{
+    const rel=REL_CADENCES[c.relationship];
+    if(!rel||!rel.mD||c.relationship==='Archive') return;
+    const mt=daysSince(c.meeting);
+    if(mt<rel.mD) return;
+    const ov=mt-rel.mD;
+    t.push({id:'meet-'+c.id, nm:c.name, act:'Personal meeting with '+c.name,
+      why:mt===9999?'No meeting recorded · due every '+rel.mD+'d':`${mt}d since last meeting · due every ${rel.mD}d`,
+      urg:ov>14?'urgent':ov>=0?'soon':'normal', pri:rel.p*10-1+(c.deal?0:5)});
   });
 
   return t.sort((a,b)=>({urgent:0,soon:1,normal:2}[a.urg]||2)-({urgent:0,soon:1,normal:2}[b.urg]||2)||a.pri-b.pri);
@@ -341,12 +318,11 @@ function rHome(){
     const cam=t.camId?CAMPAIGNS.find(c=>c.id===t.camId):null;
     let b;
     if(cam){
-      if(cam.type==='Mandate')                                                          b=BUCKETS[1];
-      else if(cam.type==='Seasonal'||cam.type==='Triggered')                           b=BUCKETS[3];
-      else if(cam.type==='Follow-Up'||cam.type==='WhatsApp'||cam.type==='Calling'||cam.type==='Personal') b=BUCKETS[0];
-      else                                                                              b=BUCKETS[2];
-    } else if(t.isMtg) { b=BUCKETS[0]; }
-    else { b=BUCKETS[0]; }
+      if(cam.type==='Mandate')                                    b=BUCKETS[1];
+      else if(cam.type==='Seasonal'||cam.type==='Triggered')     b=BUCKETS[3];
+      else if(cam.type==='Follow-Up')                             b=BUCKETS[0];
+      else                                                         b=BUCKETS[2];
+    } else { b=BUCKETS[0]; }
     b.tasks.push(t);
   });
 
@@ -377,10 +353,12 @@ function rHome(){
         };
       } else {
         const isCall=t.id.startsWith('cl-');
-        const client=CLIENTS.find(c=>'wa-'+c.id===t.id||'cl-'+c.id===t.id);
+        const isMeet=t.id.startsWith('meet-');
+        const client=CLIENTS.find(c=>'wa-'+c.id===t.id||'cl-'+c.id===t.id||'meet-'+c.id===t.id);
         if(client){
           el.onclick=(e)=>{ if(e.target.closest('.chk')) return;
             if(isCall) logCall(client);
+            else if(isMeet) logMeeting(client);
             else openWaSheet(client,null);
           };
         }
@@ -470,33 +448,13 @@ async function renderHomeDealTasks(){
         </div>`;
       // Tick
       el.querySelector('.chk').onclick=(ev)=>tickDealTask(t.id,el.querySelector('.chk'),ev);
-      el.querySelector('.tc-body').onclick=(ev)=>{ev.stopPropagation();openRescheduleTask(t.id,t.title,t.due_date);};
+      // Open deal modal on card click (not body or chk)
       if(deal) el.onclick=(ev)=>{if(ev.target.closest('.chk')||ev.target.closest('.tc-body')) return; openDealModal(deal.clientId,deal.id);};
       list.appendChild(el);
     });
   });
 }
 
-
-let rescheduleTaskId=null;
-function openRescheduleTask(id, title, currentDate){
-  rescheduleTaskId=id;
-  document.getElementById('reschedule-task-name').textContent=title||'Task';
-  document.getElementById('reschedule-date').value=currentDate||'';
-  openModal('modal-reschedule-task');
-}
-async function saveRescheduleTask(){
-  const newDate=document.getElementById('reschedule-date').value;
-  if(!newDate||!rescheduleTaskId) return;
-  const {error}=await SB.from('deal_tasks').update({due_date:newDate}).eq('id',rescheduleTaskId);
-  if(error){ showToast('Could not reschedule'); return; }
-  const t=homeDealTasks?.find(x=>x.id===rescheduleTaskId);
-  if(t) t.due_date=newDate;
-  closeModal('modal-reschedule-task');
-  homeDealTasks=null; // force reload
-  renderHomeDealTasks();
-  showToast('Task rescheduled ✓');
-}
 
 async function deleteDealTask(id, source){
   const {error}=await SB.from('deal_tasks').delete().eq('id',id);
@@ -554,24 +512,6 @@ async function tick(id, el, e){
     const card=el.parentElement;
     card.classList.add('done');
     await SB.from('task_completions').upsert({task_key:id,reset_date:today},{onConflict:'task_key'});
-    // Auto-log contact for cadence tasks so cadence clock resets permanently
-    if(id.startsWith('wa-')){
-      const cid=id.slice(3);
-      const c=CLIENTS.find(x=>x.id===cid);
-      if(c){ await SB.from('clients').update({last_wa:today}).eq('id',cid); c.wa=today;
-        await SB.from('client_activities').insert({client_id:cid,type:'whatsapp',occurred_at:new Date().toISOString()}); }
-    } else if(id.startsWith('cl-')){
-      const cid=id.slice(3);
-      const c=CLIENTS.find(x=>x.id===cid);
-      if(c){ await SB.from('clients').update({last_call:today}).eq('id',cid); c.call=today;
-        await SB.from('client_activities').insert({client_id:cid,type:'call',occurred_at:new Date().toISOString()}); }
-    } else if(id.startsWith('mtg-')){
-      const mid=id.slice(4);
-      const m=MEETINGS.find(x=>x.id===mid)||null;
-      await SB.from('client_meetings').update({done:true}).eq('id',mid);
-      MEETINGS=MEETINGS.filter(x=>x.id!==mid);
-      if(m?.client_id) await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:new Date().toISOString()});
-    }
     // Update ring counts without re-rendering list
     const tasks=mkTasks(), tot=tasks.length, nd=doneTasks.size;
     const urg=tasks.filter(t=>t.urg==='urgent'&&!doneTasks.has(t.id)).length;
@@ -605,123 +545,52 @@ function rDeals(){
     document.getElementById('d-sg-'+key+'-n').textContent=sd.length+(sd.length===1?' deal':' deals');
   });
 
-  // Flat deal list
+  // Grouped deal cards by stage
   const list=document.getElementById('deal-list'); list.innerHTML='';
-  DEALS.forEach((d,i)=>{
-    const client=CLIENTS.find(c=>c.id===d.clientId);
-    const cname=client?client.name:d.clientId;
-    const com=d.v*(d.pct/100);
-    const el=document.createElement('div');
-    el.className='dc gc-s a'; el.style.animationDelay=(i*0.05)+'s';
-    el.onclick=()=>openDealModal(d.clientId,d.id);
-    el.innerHTML=`<div class="dc-top">
-      <div><div class="dc-cli">${cname}</div><div class="dc-par">${d.pt} · ${d.cat}</div></div>
-      <span class="pill p-gh" style="font-size:9px;flex-shrink:0">${d.s}</span>
-    </div>
-    <div class="dc-bot">
-      <div><div class="dc-val">${fm(com)}</div><div class="dc-spend">${fm(d.v)} client spend</div></div>
-    </div>`;
-    list.appendChild(el);
-  });
-}
-
-let dealTab='deals';
-function switchDealTab(tab){
-  dealTab=tab;
-  document.querySelectorAll('#s-deals .home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
-  document.getElementById('deal-list-wrap').style.display=tab==='deals'?'':'none';
-  document.getElementById('deal-tasks-timeline').style.display=tab==='tasks'?'':'none';
-  if(tab==='tasks') renderDealTasksTimeline();
-}
-
-async function renderDealTasksTimeline(){
-  const wrap=document.getElementById('deal-tasks-timeline'); wrap.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
-  const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false});
-  const tasks=data||[];
-  if(!tasks.length){ wrap.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding tasks.</div>'; return; }
-  const today=new Date(); today.setHours(0,0,0,0);
-  const buckets=new Map();
-  tasks.forEach(t=>{
-    if(!t.due_date){ const k='No Date'; if(!buckets.has(k)) buckets.set(k,{label:'No Date',color:'',items:[]}); buckets.get(k).items.push(t); return; }
-    const d=new Date(t.due_date); d.setHours(0,0,0,0);
-    const diff=Math.round((d-today)/86400000);
-    let label,color='';
-    if(diff<0){label='Overdue';color='var(--red)';}
-    else if(diff===0){label='Today';color='var(--gold)';}
-    else if(diff===1){label='Tomorrow';}
-    else label=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
-    if(!buckets.has(label)) buckets.set(label,{label,color,items:[]});
-    buckets.get(label).items.push(t);
-  });
-  wrap.innerHTML='';
-  buckets.forEach(({label,color,items})=>{
+  const STAGES=['Confirmed','Negotiation','Tentative','Waiting'];
+  let gi=0;
+  STAGES.forEach(stage=>{
+    const sd=DEALS.filter(d=>d.s===stage);
+    if(!sd.length) return;
     const hdr=document.createElement('div');
-    hdr.className='rec-cat-header';
-    if(color) hdr.style.color=color;
-    hdr.textContent=label;
-    wrap.appendChild(hdr);
-    const card=document.createElement('div');
-    card.className='acts';
-    items.forEach(t=>{
-      const deal=DEALS.find(d=>d.id===t.deal_id);
-      const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
-      const sub=[client?.name,deal?.pt].filter(Boolean).join(' · ');
-      const row=document.createElement('div');
-      row.className='act';
-      row.style.cssText='padding:10px 14px;gap:12px;';
-      row.innerHTML=`
-        <div style="width:6px;height:6px;border-radius:50%;background:var(--gold);opacity:0.5;flex-shrink:0;margin-top:2px"></div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.title}</div>
-          ${sub?`<div style="font-size:11px;color:var(--t3);margin-top:2px">${sub}</div>`:''}
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-          <div class="atl-edit" style="margin-top:0" onclick="event.stopPropagation();openEditDealTask('${t.id}','${(t.title||'').replace(/'/g,"\\'")}','${t.due_date||''}',true)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
-          <div class="chk" onclick="event.stopPropagation();tickDealTaskTimeline('${t.id}',this.closest('.act'))"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>
-        </div>`;
-      card.appendChild(row);
+    hdr.className='deal-group-hdr'; hdr.textContent=stage;
+    list.appendChild(hdr);
+    sd.forEach(d=>{
+      const client=CLIENTS.find(c=>c.id===d.clientId);
+      const cname=client?client.name:d.clientId;
+      const com=d.v*(d.pct/100);
+      const el=document.createElement('div');
+      el.className='dc gc-s a'; el.style.animationDelay=(gi++*0.05)+'s';
+      el.onclick=()=>openDealModal(d.clientId,d.id);
+      el.innerHTML=`<div class="dc-top">
+        <div><div class="dc-cli">${cname}</div><div class="dc-par">${d.pt} · ${d.cat}</div></div>
+      </div>
+      <div class="dc-bot">
+        <div><div class="dc-val">${fm(com)}</div><div class="dc-spend">${fm(d.v)} client spend</div></div>
+      </div>`;
+      list.appendChild(el);
     });
-    wrap.appendChild(card);
   });
-}
-
-async function tickDealTaskTimeline(id,card){
-  await SB.from('deal_tasks').update({done:true}).eq('id',id);
-  card.style.transition='opacity 0.3s'; card.style.opacity='0';
-  setTimeout(()=>{ card.remove(); },300);
 }
 
 // ── CAMPAIGNS ─────────────────────────────────────────────────────
 function rCampaigns(){
   const list=document.getElementById('cam-list'); list.innerHTML='';
 
-  // Stats
-  const total=CAMPAIGNS.length;
-  const followUps=CAMPAIGNS.filter(c=>['Follow-Up','WhatsApp','Calling','Personal'].includes(c.type)).length;
-  const mandates=CAMPAIGNS.filter(c=>c.type==='Mandate').length;
-  const luxury=CAMPAIGNS.filter(c=>['Event','Ongoing','Triggered','Seasonal'].includes(c.type)).length;
-  const statsEl=document.getElementById('cam-stats');
-  if(statsEl) statsEl.innerHTML=`
-    <div class="cli-stat"><div class="cli-stat-n">${total}</div><div class="cli-stat-l">Total</div></div>
-    <div class="cli-stat"><div class="cli-stat-n g">${followUps}</div><div class="cli-stat-l">Follow-Ups</div></div>
-    <div class="cli-stat"><div class="cli-stat-n">${mandates}</div><div class="cli-stat-l">Mandates</div></div>
-    <div class="cli-stat"><div class="cli-stat-n">${luxury}</div><div class="cli-stat-l">Luxury</div></div>
-  `;
-
   const GROUPS=[
+    {key:'followups', label:'Follow-Ups',          cams:[]},
     {key:'mandates',  label:'Mandates',             cams:[]},
     {key:'luxury',    label:'Luxury',               cams:[]},
     {key:'holiday',   label:'Holidays & Birthdays', cams:[]},
-    {key:'followups', label:'Follow-Ups',           cams:[]},
   ];
 
   CAMPAIGNS.forEach(cam=>{
     let g;
-    if(cam.type==='Follow-Up'||cam.type==='WhatsApp'||cam.type==='Calling'||cam.type==='Personal') g=GROUPS[3];
-    else if(cam.type==='Mandate')                        g=GROUPS[0];
-    else if(cam.type==='Seasonal'||cam.type==='Triggered') g=GROUPS[2];
-    else if(cam.type==='Event'||cam.type==='Ongoing')    g=GROUPS[1];
-    else                                                  g=GROUPS[1];
+    if(cam.type==='Follow-Up')                          g=GROUPS[0];
+    else if(cam.type==='Mandate')                        g=GROUPS[1];
+    else if(cam.type==='Seasonal'||cam.type==='Triggered') g=GROUPS[3];
+    else if(cam.type==='Event'||cam.type==='Ongoing')    g=GROUPS[2];
+    else                                                  g=GROUPS[2];
     g.cams.push(cam);
   });
 
@@ -742,166 +611,13 @@ function rCampaigns(){
       </div>
       <div class="camc-body">${cam.notes||''}</div>
       <div class="camc-foot">
-        ${cam.date?`<span class="pill p-gh">${cam.date}</span>`:''}
+        ${cam.date?`<span class="pill p-gh">${fmtCamDate(cam.date)}</span>`:''}
         ${cam.seg?`<span class="pill p-gold">Seg: ${cam.seg}</span>`:''}
         <span class="pill p-grn">${cnt} contacts</span>
       </div>`;
       list.appendChild(el);
     });
   });
-
-  // ── Virtual Follow-Up cards (auto-generated from cadence + meetings) ──
-  const waDue=CLIENTS.filter(c=>{
-    const rel=REL_CADENCES[c.relationship];
-    if(!rel||c.relationship==='Archive'||!c.relationship) return false;
-    const wa=daysSince(c.wa), cl=daysSince(c.call);
-    if(rel.cD&&cl>=rel.cD) return false; // call supersedes wa
-    return rel.waD&&wa>=rel.waD;
-  });
-  const callDue=CLIENTS.filter(c=>{
-    const rel=REL_CADENCES[c.relationship];
-    if(!rel||c.relationship==='Archive'||!c.relationship) return false;
-    return rel.cD&&daysSince(c.call)>=rel.cD;
-  });
-  const mtgDue=MEETINGS.filter(m=>Math.floor((new Date(m.due_date)-TODAY)/86400000)<=7);
-
-  const virtualCams=[
-    {label:'WhatsApp', type:'WhatsApp', color:'p-grn', count:waDue.length, desc:'Clients due a WhatsApp based on relationship cadence'},
-    {label:'Calling',  type:'Calling',  color:'p-blu', count:callDue.length, desc:'Clients due a call — supersedes WhatsApp'},
-    {label:'Personal', type:'Personal', color:'p-amb', count:mtgDue.length,  desc:'Scheduled meetings within the next 7 days'},
-  ];
-  const virtualData={WhatsApp:waDue, Calling:callDue, Personal:mtgDue.map(m=>({...m,_isMtg:true}))};
-  if(virtualCams.some(v=>v.count>0)){
-    const vhdr=document.createElement('div');
-    vhdr.className='cam-group-hdr'; vhdr.textContent='Follow-Ups';
-    list.appendChild(vhdr);
-    virtualCams.forEach(v=>{
-      if(!v.count) return;
-      const el=document.createElement('div');
-      el.className='camc gc a'; el.style.animationDelay=(gi++*0.05)+'s';
-      el.onclick=()=>openVirtualCampaign(v.type, v.label, v.color, virtualData[v.type]);
-      el.innerHTML=`<div class="camc-top">
-        <div class="camc-name">${v.label}</div>
-        <span class="pill ${v.color}">${v.type}</span>
-      </div>
-      <div class="camc-body">${v.desc}</div>
-      <div class="camc-foot">
-        <span class="pill p-grn">${v.count} client${v.count===1?'':'s'}</span>
-        <span class="pill p-gh">Auto-generated</span>
-      </div>`;
-      list.appendChild(el);
-    });
-  }
-}
-
-function openVirtualCampaign(type, label, colorClass, items){
-  renderVirtualCampaignProfile(type, label, colorClass, items);
-  pushProf('ps-campaign');
-}
-
-function renderVirtualCampaignProfile(type, label, colorClass, items){
-  const iconSvg={
-    WhatsApp:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
-    Calling:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.6a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 3h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 10.91a16 16 0 0 0 5.61 5.61l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
-    Personal:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-  }[type]||'';
-
-  const desc={
-    WhatsApp:'Clients due a WhatsApp based on their relationship cadence. Ticking completes their daily task and resets the cadence clock.',
-    Calling:'Clients due a call. Supersedes WhatsApp — ticking logs the call and resets the clock.',
-    Personal:'Scheduled meetings within the next 7 days.',
-  }[type]||'';
-
-  const rosterHtml=items.length?items.map(item=>{
-    if(type==='Personal'){
-      // item is a meeting record
-      const client=CLIENTS.find(x=>x.id===item.client_id);
-      const name=client?client.name:'Unknown';
-      const daysUntil=Math.floor((new Date(item.due_date)-TODAY)/86400000);
-      const whenLabel=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
-      return `<div class="cam-roster-item vcam-row a" id="vcam-mtg-${item.id}">
-        <div class="cri-av">${ini(name)}</div>
-        <div style="flex:1;min-width:0"><div class="cri-name">${name}</div><div class="cri-sub">${item.title||'Meeting'} · ${whenLabel}</div></div>
-        <div class="cri-check" onclick="tickVirtualMtg('${item.id}','${type}','${label}','${colorClass}',this)">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-      </div>`;
-    } else {
-      // item is a client
-      const taskId=type==='Calling'?'cl-'+item.id:'wa-'+item.id;
-      const isDone=doneTasks.has(taskId);
-      return `<div class="cam-roster-item vcam-row a${isDone?' done':''}">
-        <div class="cri-av">${ini(item.name)}</div>
-        <div style="flex:1;min-width:0"><div class="cri-name">${item.name}</div><div class="cri-sub">${item.role||item.city||''}</div></div>
-        <div class="cri-check${isDone?' on':''}" onclick="tickVirtualClient('${item.id}','${type}','${label}','${colorClass}',this)">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-      </div>`;
-    }
-  }).join('')
-  :'<div style="padding:16px;font-size:13px;color:var(--t3);font-style:italic">All done — nothing pending.</div>';
-
-  document.getElementById('ps-campaign-body').innerHTML=`
-    <div class="prof-back-row">
-      <div class="prof-back" onclick="closeProf('ps-campaign')">
-        <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 1L1 7l6 6"/></svg><span>Campaigns</span>
-      </div>
-    </div>
-    <div class="prof-hero">
-      <div class="prof-av-row">
-        <div class="prof-av sq" style="background:rgba(138,109,62,0.09);border-color:var(--gold-border);color:var(--gold)">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">${iconSvg}</svg>
-        </div>
-        <div><div class="prof-name">${label}</div><div class="prof-role-l">Auto-generated · Follow-Up</div></div>
-      </div>
-      <div class="prof-pills">
-        <span class="pill ${colorClass}">${type}</span>
-        <span class="pill p-grn">${items.length} pending</span>
-      </div>
-    </div>
-    <div class="prof-sec"><div class="sec-notes" style="font-size:12px">${desc}</div></div>
-    <div class="prof-sec">
-      <div class="sec-lbl">Pending · ${items.length}</div>
-      ${rosterHtml}
-    </div>
-    <div style="height:36px"></div>`;
-}
-
-async function tickVirtualClient(clientId, type, label, colorClass, el){
-  const c=CLIENTS.find(x=>x.id===clientId); if(!c) return;
-  el.classList.add('on');
-  el.closest('.cam-roster-item').classList.add('done');
-  if(type==='Calling'){
-    await logCall(c);
-  } else {
-    await logWa(c);
-  }
-  // Re-derive list and re-render
-  const waDue=CLIENTS.filter(cl=>{
-    const rel=REL_CADENCES[cl.relationship];
-    if(!rel||cl.relationship==='Archive'||!cl.relationship) return false;
-    if(rel.cD&&daysSince(cl.call)>=rel.cD) return false;
-    return rel.waD&&daysSince(cl.wa)>=rel.waD;
-  });
-  const callDue=CLIENTS.filter(cl=>{
-    const rel=REL_CADENCES[cl.relationship];
-    if(!rel||cl.relationship==='Archive'||!cl.relationship) return false;
-    return rel.cD&&daysSince(cl.call)>=rel.cD;
-  });
-  const newItems=type==='Calling'?callDue:waDue;
-  setTimeout(()=>renderVirtualCampaignProfile(type,label,colorClass,newItems),500);
-}
-
-async function tickVirtualMtg(mtgId, type, label, colorClass, el){
-  el.classList.add('on');
-  el.closest('.cam-roster-item').classList.add('done');
-  const m=MEETINGS.find(x=>x.id===mtgId);
-  await SB.from('client_meetings').update({done:true}).eq('id',mtgId);
-  MEETINGS=MEETINGS.filter(x=>x.id!==mtgId);
-  if(m?.client_id) await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:new Date().toISOString()});
-  rHome();
-  const mtgDue=MEETINGS.filter(x=>Math.floor((new Date(x.due_date)-TODAY)/86400000)<=7);
-  setTimeout(()=>renderVirtualCampaignProfile(type,label,colorClass,mtgDue),500);
 }
 
 async function openCampaign(cam){
@@ -960,7 +676,7 @@ function renderCampaignProfile(cam){
         <div class="prof-av sq" style="background:rgba(42,95,168,0.09);border-color:rgba(42,95,168,0.22);color:var(--blue)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>
         </div>
-        <div><div class="prof-name">${cam.name}</div><div class="prof-role-l">${cam.type} · ${cam.date}</div></div>
+        <div><div class="prof-name">${cam.name}</div><div class="prof-role-l">${cam.type} · ${fmtCamDate(cam.date)}</div></div>
       </div>
       <div class="prof-pills">
         <span class="pill ${CC[cam.type]||'p-gh'}">${cam.type}</span>
@@ -1185,15 +901,15 @@ function rClients(){
 
   // Stats
   const total=CLIENTS.length;
-  const vips=CLIENTS.filter(c=>c.vip).length;
   const billionaires=CLIENTS.filter(c=>c.nw==='Billionaire').length;
   const centimillionaires=CLIENTS.filter(c=>c.nw==='Centimillionaire').length;
+  const activeRels=CLIENTS.filter(c=>c.relationship&&c.relationship!=='Archive').length;
   const statsEl=document.getElementById('cli-stats');
   if(statsEl) statsEl.innerHTML=`
     <div class="cli-stat"><div class="cli-stat-n">${total}</div><div class="cli-stat-l">Total</div></div>
-    <div class="cli-stat"><div class="cli-stat-n g">${vips}</div><div class="cli-stat-l">VIPs</div></div>
-    <div class="cli-stat"><div class="cli-stat-n">${billionaires}</div><div class="cli-stat-l">Billionaires</div></div>
+    <div class="cli-stat"><div class="cli-stat-n g">${billionaires}</div><div class="cli-stat-l">Billionaires</div></div>
     <div class="cli-stat"><div class="cli-stat-n">${centimillionaires}</div><div class="cli-stat-l">Centimilli.</div></div>
+    <div class="cli-stat"><div class="cli-stat-n">${activeRels}</div><div class="cli-stat-l">Active</div></div>
   `;
 
   // Active filter pills
@@ -1212,46 +928,25 @@ function rClients(){
     if(lbl) lbl.textContent=pills.length?`Filter (${pills.length})`:'Filter';
   }
 
-  const NW_ORDER=['Billionaire','Centimillionaire','HNWI'];
-  list.sort((a,b)=>{
-    // VIPs first, then by NW, then A-Z
-    if(a.vip!==b.vip) return a.vip?-1:1;
-    const ai=NW_ORDER.includes(a.nw)?NW_ORDER.indexOf(a.nw):99;
-    const bi=NW_ORDER.includes(b.nw)?NW_ORDER.indexOf(b.nw):99;
-    if(ai!==bi) return ai-bi;
-    return (a.name||'').localeCompare(b.name||'');
-  });
-
   const el=document.getElementById('cli-list'); el.innerHTML='';
-  const showNwHeaders=!q&&!clientFilters.nw&&!clientFilters.tag;
-  let lastGroup=null; // 'VIP' or NW value
-  let idx=0;
-  list.forEach(c=>{
-    if(showNwHeaders){
-      const group=c.vip?'VIP':c.nw;
-      if(group!==lastGroup){
-        lastGroup=group;
-        const h=document.createElement('div');
-        h.className='rec-cat-header'; h.textContent=group;
-        el.appendChild(h);
-      }
-    }
+  list.forEach((c,i)=>{
     const rel=REL_CADENCES[c.relationship];
     const wa=daysSince(c.wa), cl=daysSince(c.call);
     const clOv=rel?.cD&&cl>=rel.cD, waOv=rel?.waD&&wa>=rel.waD;
     const div=document.createElement('div');
-    div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
+    div.className='pc gc a'; div.style.animationDelay=(i*0.04)+'s';
     div.onclick=()=>openC(c);
-    const hasDeal=DEALS.some(d=>d.clientId===c.id);
-    const cardTag=hasDeal?'<span class="pill p-gold pc-pill">Deal</span>':(c.int||[]).includes('High Potential')?'<span class="pill pc-pill" style="background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':'';
-    const vipStar=c.vip?`<div class="pc-vip-star"><svg width="11" height="11" viewBox="0 0 24 24" fill="var(--gold)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>`:'';
-    div.innerHTML=`${vipStar}<div class="pc-av">${ini(c.name)}</div>
+    div.innerHTML=`<div class="pc-av">${ini(c.name)}${c.deal?'<div class="dot"></div>':''}</div>
   <div class="pc-info">
     <div class="pc-name">${c.name}</div>
     <div class="pc-sub">${c.role||c.city||''}</div>
     ${c.relationship==='Proxy'&&c.proxyContact?`<div class="pc-proxy">via ${c.proxyContact}</div>`:''}
   </div>
-  <div class="pc-r">${cardTag}</div>`;
+  <div class="pc-r">
+    ${c.relationship?`<span class="pill p-gh" style="font-size:9px">${c.relationship}</span>`:''}
+    ${(c.int||[]).includes('High Potential')?'<span class="pill" style="font-size:9px;background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':''}
+    ${clOv?'<span class="pill p-red" style="font-size:9px">Call due</span>':waOv?'<span class="pill p-amb" style="font-size:9px">Follow up</span>':''}
+  </div>`;
     el.appendChild(div);
   });
 }
@@ -1401,64 +1096,8 @@ function renderActivityTimeline(clientId){
         <div class="atl-date">${fmtActivityDate(a.occurred_at)}</div>
         ${a.notes&&a.type!=='campaign'?`<div class="atl-notes">${a.notes}</div>`:''}
       </div>
-      ${a.type!=='campaign'?`<div class="atl-edit" onclick="openEditActivity('${a.id}','${clientId}')">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-      </div>`:''}
     </div>`).join('')}
   </div>`;
-}
-
-let editActivityId=null, editActivityClientId=null;
-function openEditActivity(actId, clientId){
-  const act=CLIENT_ACTIVITIES.find(a=>a.id===actId); if(!act) return;
-  editActivityId=actId; editActivityClientId=clientId;
-  document.getElementById('edit-act-type').textContent=activityLabel(act.type);
-  // Pre-fill date from occurred_at
-  const d=new Date(act.occurred_at);
-  const dateStr=d.toISOString().split('T')[0];
-  document.getElementById('edit-act-date').value=dateStr;
-  document.getElementById('edit-act-notes').value=act.notes||'';
-  openModal('modal-edit-activity');
-}
-async function saveEditActivity(){
-  const act=CLIENT_ACTIVITIES.find(a=>a.id===editActivityId); if(!act) return;
-  const dateVal=document.getElementById('edit-act-date').value;
-  const notes=document.getElementById('edit-act-notes').value.trim();
-  if(!dateVal){ showToast('Please set a date'); return; }
-  const newOccurred=new Date(dateVal+'T12:00:00').toISOString();
-  const {error}=await SB.from('client_activities').update({occurred_at:newOccurred, notes:notes||null}).eq('id',editActivityId);
-  if(error){ showToast('Could not save: '+error.message); return; }
-  // Update in-memory
-  act.occurred_at=newOccurred; act.notes=notes||null;
-  CLIENT_ACTIVITIES.sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at));
-  // Update client's last_wa / last_call if this is the most recent of its type
-  const c=CLIENTS.find(x=>x.id===editActivityClientId);
-  if(c){
-    const sameType=CLIENT_ACTIVITIES.filter(a=>a.client_id===editActivityClientId&&a.type===act.type);
-    const mostRecent=sameType[0];
-    if(mostRecent?.id===editActivityId){
-      const dateOnly=dateVal;
-      if(act.type==='whatsapp'){ await SB.from('clients').update({last_wa:dateOnly}).eq('id',c.id); c.wa=dateOnly; }
-      if(act.type==='call'){     await SB.from('clients').update({last_call:dateOnly}).eq('id',c.id); c.call=dateOnly; }
-    }
-  }
-  closeModal('modal-edit-activity');
-  const tlInner=document.getElementById('atl-inner');
-  if(tlInner) tlInner.innerHTML=renderActivityTimeline(editActivityClientId);
-  rHome();
-  showToast('Activity updated ✓');
-}
-
-async function deleteActivity(){
-  if(!editActivityId) return;
-  const {error}=await SB.from('client_activities').delete().eq('id',editActivityId);
-  if(error){ showToast('Could not delete: '+error.message); return; }
-  CLIENT_ACTIVITIES=CLIENT_ACTIVITIES.filter(a=>a.id!==editActivityId);
-  closeModal('modal-edit-activity');
-  const tlInner=document.getElementById('atl-inner');
-  if(tlInner) tlInner.innerHTML=renderActivityTimeline(editActivityClientId);
-  rHome();
-  showToast('Activity deleted');
 }
 
 
@@ -1492,7 +1131,9 @@ async function openC(c){
 
   const cCams=CAMPAIGNS.filter(cam=>getCampaignClients(cam).some(cl2=>cl2.id===c.id));
   const camHtml=cCams.length?cCams.map(cam=>`<span class="pill p-cam" onclick="openCampaign(CAMPAIGNS.find(x=>x.id==='${cam.id}'))">${cam.name}</span>`).join(''):'';
-  // NOTE: activities are loaded AFTER panel opens (see below) to avoid blocking
+
+  // Load activities (async, then update)
+  await loadClientActivities(c.id, c);
 
   document.getElementById('ps-client-body').innerHTML=`
     <div class="prof-back-row">
@@ -1514,6 +1155,10 @@ async function openC(c){
         <span class="pill p-gh">${c.rel}</span>
         ${c.relationship?`<span class="pill p-gh">${c.relationship}</span>`:''}
       </div>
+      ${c.tier==='Sleeper'?`<button class="dormant-btn${c.dormant?' on':''}" onclick="toggleDormant('${c.id}')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="${c.dormant?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        ${c.dormant?'Dormant · excluded from campaigns':'Mark dormant · pause campaigns'}
+      </button>`:''}
     </div>
     ${c.relationship==='Proxy'&&c.proxyContact?`<div class="prof-sec" style="padding:12px 18px;margin-bottom:10px;display:flex;align-items:center;gap:10px;background:rgba(138,109,62,0.06);border-color:var(--gold-border)"><div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--t3);flex-shrink:0">Via Proxy</div><div style="font-size:13px;font-weight:600;color:var(--t1)">${c.proxyContact}</div></div>`:''}
     <div class="prof-sec">
@@ -1522,7 +1167,6 @@ async function openC(c){
       <div class="sec-row"><div class="sec-k">Last WhatsApp</div><div class="sec-v ${waOv?'ov':wa!==9999?'ok':''}">${waStr}${waOv?' — Overdue':''}</div></div>
       <div class="sec-row"><div class="sec-k">Last Phone Call</div><div class="sec-v ${clOv?'ov':cl!==9999?'ok':''}">${clStr}${clOv?' — Overdue':''}</div></div>
       ${c.followUp?`<div class="sec-row"><div class="sec-k">Follow-up date</div><div class="sec-v">${c.followUp}</div></div>`:''}
-      ${c.dob?`<div class="sec-row"><div class="sec-k">Birthday</div><div class="sec-v">${new Date(c.dob+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long'})}</div></div>`:''}
     </div>
     ${c.int.length?`<div class="prof-sec"><div class="sec-lbl">Interests & Segments</div><div class="itags">${c.int.map(x=>`<span class="pill p-gh">${x}</span>`).join('')}</div></div>`:''}
     ${camHtml?`<div class="prof-sec"><div class="sec-lbl">Active Campaigns</div><div class="itags" style="margin-top:4px">${camHtml}</div></div>`:''}
@@ -1530,7 +1174,7 @@ async function openC(c){
     ${c.notes?`<div class="prof-sec"><div class="sec-lbl">Notes</div><div class="sec-notes">${c.notes}</div></div>`:''}
     <div class="prof-sec">
       <div class="sec-lbl">Activity Timeline</div>
-      <div id="atl-inner"><div class="atl-loading">Loading history…</div></div>
+      <div id="atl-inner">${renderActivityTimeline(c.id)}</div>
     </div>
     <div class="acts">
       <div class="act" onclick="openWaSheet(CLIENTS.find(x=>x.id==='${c.id}'),null)">
@@ -1549,29 +1193,13 @@ async function openC(c){
         <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
         <div><div class="act-t">Log Meeting</div><div class="act-s">Record an in-person meeting</div></div>
       </div>
-      <div class="act" onclick="openScheduleMeeting('${c.id}','${c.name.replace(/'/g,"\\'")}')">
-        <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg></div>
-        <div><div class="act-t">Schedule Meeting</div><div class="act-s">Add to Personal follow-up campaign</div></div>
-      </div>
       <div class="act" onclick="openDealModal('${c.id}',null)">
         <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
         <div><div class="act-t">Add Deal</div><div class="act-s">Log a new deal for this client</div></div>
       </div>
-      <div class="act" onclick="toggleVip('${c.id}')">
-        <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="${c.vip?'var(--gold)':'none'}" stroke="var(--gold)" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
-        <div><div class="act-t" style="${c.vip?'color:var(--gold)':''}">${c.vip?'Remove VIP':'Mark as VIP'}</div><div class="act-s">${c.vip?'Remove VIP status from this client':'Pin to top of client list with star'}</div></div>
-      </div>
-      ${c.tier==='Sleeper'?`<div class="act${c.dormant?' act-dormant-on':''}" onclick="toggleDormant('${c.id}')">
-        <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="${c.dormant?'#8a93a2':'none'}" stroke="#8a93a2" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
-        <div><div class="act-t" style="${c.dormant?'color:#8a93a2':''}">${c.dormant?'Remove Dormant':'Mark as Dormant'}</div><div class="act-s">${c.dormant?'Client will re-enter campaigns':'Exclude from all campaign send-outs'}</div></div>
-      </div>`:''}
     </div>
     <div style="height:36px"></div>`;
   pushProf('ps-client');
-  // Load activities in background — panel is already open and animating
-  await loadClientActivities(c.id, c);
-  const tlInner=document.getElementById('atl-inner');
-  if(tlInner && currentActivityClientId===c.id) tlInner.innerHTML=renderActivityTimeline(c.id);
 }
 
 // ── LOG CALL / WA / MEETING ───────────────────────────────────────
@@ -1617,77 +1245,28 @@ async function logMeeting(c){
   rHome(); if(curTab==='clients') rClients(); showToast('Meeting logged ✓');
 }
 
-async function toggleVip(clientId){
-  const c=CLIENTS.find(x=>x.id===clientId); if(!c) return;
-  if(c.vip){
-    c.int=c.int.filter(i=>i!=='VIP');
-    c.vip=false;
-  } else {
-    c.int=[...c.int,'VIP'];
-    c.vip=true;
-  }
-  const {error:vipErr}=await SB.from('clients').update({interests:c.int}).eq('id',clientId);
-  if(vipErr){ console.error('VIP save error:',vipErr); showToast('Save failed: '+vipErr.message); return; }
-  rClients();
-  openC(c);
-  showToast(c.vip?'VIP status added ✓':'VIP status removed');
-}
-
 async function toggleDormant(id){
   const c=CLIENTS.find(x=>x.id===id); if(!c) return;
   c.dormant=!c.dormant;
   await SB.from('clients').update({dormant:c.dormant}).eq('id',id);
   openC(c);
-  showToast(c.dormant?'Marked dormant — excluded from campaigns ✓':'Dormant removed ✓');
-}
-
-let scheduleMeetingClientId=null;
-function openScheduleMeeting(clientId, clientName){
-  scheduleMeetingClientId=clientId;
-  document.getElementById('schedule-meeting-client').textContent=clientName;
-  document.getElementById('schedule-meeting-title').value='';
-  document.getElementById('schedule-meeting-date').value='';
-  openModal('modal-schedule-meeting');
-}
-async function saveScheduleMeeting(){
-  if(!scheduleMeetingClientId) return;
-  const title=document.getElementById('schedule-meeting-title').value.trim();
-  const date=document.getElementById('schedule-meeting-date').value;
-  if(!date){ showToast('Please set a date'); return; }
-  const {data,error}=await SB.from('client_meetings').insert({client_id:scheduleMeetingClientId,title:title||null,due_date:date,done:false}).select().single();
-  if(error){ console.error('client_meetings error:',error); showToast('Could not save — run SQL in Supabase'); return; }
-  MEETINGS.push(data);
-  closeModal('modal-schedule-meeting');
-  rHome();
-  showToast('Meeting scheduled ✓');
+  showToast(c.dormant?'Marked dormant ✓':'Removed dormant ✓');
 }
 
 // ── PARTNERS ──────────────────────────────────────────────────────
 function rPartners(){
-  let list=cF==='All'?[...PARTNERS]:[...PARTNERS.filter(p=>p.cat===cF)];
-  list.sort((a,b)=>{
-    if(a.cat!==b.cat) return (a.cat||'').localeCompare(b.cat||'');
-    return (a.name||'').localeCompare(b.name||'');
-  });
+  let list=cF==='All'?PARTNERS:PARTNERS.filter(p=>p.cat===cF);
   const el=document.getElementById('par-list'); el.innerHTML='';
-  const showCatHeaders=cF==='All';
-  let lastCat=null;
-  let idx=0;
-  list.forEach(p=>{
-    if(showCatHeaders&&p.cat!==lastCat){
-      lastCat=p.cat;
-      const h=document.createElement('div');
-      h.className='rec-cat-header'; h.textContent=p.cat;
-      el.appendChild(h);
-    }
+  list.forEach((p,i)=>{
     const div=document.createElement('div');
-    div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
+    div.className='pc gc a'; div.style.animationDelay=(i*0.04)+'s';
     div.onclick=()=>openP(p);
     div.innerHTML=`<div class="pc-av" style="border-radius:14px;font-size:13px">${abbr(p.name)}</div>
       <div class="pc-info"><div class="pc-name">${p.name}</div><div class="pc-sub">${p.contact}${p.role?' · '+p.role:''}</div></div>
       <div class="pc-r">
         ${p.fee?`<span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--gold);font-weight:300">${p.fee}</span>`:''}
         <span class="pill p-gh" style="font-size:9px">${p.cat}</span>
+        ${p.isC?'<span class="pill p-blu" style="font-size:9px">Client</span>':''}
       </div>`;
     el.appendChild(div);
   });
@@ -1709,8 +1288,8 @@ function openP(p){
       </div>
       <div class="prof-pills">
         <span class="pill p-gh">${p.tier}</span>
-        ${p.fee?`<span class="pill p-gold">${p.fee} ref. fee</span>`:''}
-        ${p.bizFee?`<span class="pill p-gh">${p.bizFee} bus. fee</span>`:''}
+        ${p.fee?`<span class="pill p-gold">${p.fee} intro fee</span>`:''}
+        ${p.bizFee?`<span class="pill p-gh">${p.bizFee} biz fee</span>`:''}
         ${p.isC?'<span class="pill p-blu">Also a Client</span>':''}
       </div>
     </div>
@@ -1724,10 +1303,9 @@ function openP(p){
     </div>
     <div class="prof-sec">
       <div class="sec-lbl">Partnership Terms</div>
-      ${p.fee?`<div class="sec-row"><div class="sec-k">Referral Fee</div><div class="sec-v">${p.fee}</div></div>`:''}
+      ${p.fee?`<div class="sec-row"><div class="sec-k">Intro Fee</div><div class="sec-v">${p.fee}</div></div>`:''}
       ${p.bizFee?`<div class="sec-row"><div class="sec-k">Business Fee</div><div class="sec-v">${p.bizFee}</div></div>`:''}
-      ${(()=>{const r=parsePct(p.fee);if(!r||!p.bizFee) return '';const raw=100000/(r/100);const threshold=Math.floor(raw/100000)*100000||Math.floor(raw/10000)*10000;return `<div class="sec-row"><div class="sec-k">Client Spend Threshold</div><div class="sec-v" style="font-weight:600">${fm(threshold)}</div></div>`;})()}
-      ${(()=>{const pDeals=DEALS.filter(d=>d.pt===p.name);if(!pDeals.length||!parsePct(p.fee)) return '';const totalComm=pDeals.reduce((s,d)=>s+(d.v*(d.pct/100)),0);const effComm=totalComm*(parsePct(p.fee)/100);return `<div class="sec-row"><div class="sec-k">Effective Commission</div><div class="sec-v" style="color:var(--gold);font-weight:700">${fm(effComm)}</div></div><div class="sec-row"><div class="sec-k">From Deals</div><div class="sec-v">${pDeals.length} deal${pDeals.length!==1?'s':''} · ${fm(totalComm)} total comm.</div></div>`;})()}
+      ${p.spend?`<div class="sec-row"><div class="sec-k">Client Spend Threshold</div><div class="sec-v">${fm(p.spend)}</div></div>`:''}
     </div>
     ${p.notes?`<div class="prof-sec"><div class="sec-lbl">Notes</div><div class="sec-notes">${p.notes}</div></div>`:''}
     <div style="height:36px"></div>`;
@@ -1890,15 +1468,11 @@ function closeProf(id){
 }
 
 // ── MODALS ────────────────────────────────────────────────────────
-function openModal(id){
-  const el=document.getElementById(id);
-  if(!el){ console.error('openModal: element not found:',id); return; }
-  el.classList.add('open');
-  const sheet=el.querySelector('.modal-sheet');
-  if(sheet) sheet.scrollTop=0;
-}
-function closeModal(id){ const el=document.getElementById(id); if(el) el.classList.remove('open'); }
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 function closeModalOut(e,id){ if(e.target===document.getElementById(id)) closeModal(id); }
+function openEditPanel(id){ const el=document.getElementById(id); el.style.display='block'; el.scrollTop=0; requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('open'))); }
+function closeEditPanel(id){ document.getElementById(id).classList.remove('open'); setTimeout(()=>document.getElementById(id).style.display='none',380); }
 function selSeg(el,val){ selSegVal=val; document.querySelectorAll('#seg-chips .seg-chip').forEach(c=>c.classList.toggle('on',c===el)); }
 function selEditSeg(el,val){ editSegVal=val; document.querySelectorAll('#edit-seg-chips .seg-chip').forEach(c=>c.classList.toggle('on',c===el)); }
 
@@ -1920,50 +1494,37 @@ async function saveClient(){
     notes:document.getElementById('nc-notes').value.trim(),
     sort_order: CLIENTS.length
   };
-  const ncDob=document.getElementById('nc-dob')?.value||null;
   const {data,error}=await SB.from('clients').insert(row).select().single();
   if(error){ alert('Error saving: '+error.message); return; }
-  if(ncDob){ await SB.from('clients').update({dob:ncDob}).eq('id',data.id); data.dob=ncDob; }
   CLIENTS.push(normaliseClient(data));
   closeModal('modal-client');
-  ['nc-name','nc-role','nc-city','nc-nat','nc-notes','nc-dob'].forEach(id=>document.getElementById(id).value='');
+  ['nc-name','nc-role','nc-city','nc-nat','nc-notes'].forEach(id=>document.getElementById(id).value='');
   document.querySelectorAll('#nc-int-chips .int-chip, #nc-tag-chips .int-chip').forEach(el=>el.classList.remove('on'));
   rClients(); updateHomeStats(); showToast('Client added ✓');
 }
 
 function openEditClient(id){
-  try{
-    const c=CLIENTS.find(x=>x.id===id); if(!c) return;
-    editClientId=id;
-    const _v=(elId,val)=>{const el=document.getElementById(elId);if(el)el.value=val;};
-    _v('ec-name',c.name);
-    _v('ec-role',c.role||'');
-    _v('ec-city',c.city||'');
-    _v('ec-tier',c.tier);
-    _v('ec-nw',c.nw);
-    _v('ec-nat',c.nat||'');
-    _v('ec-rel',c.rel||'Unknown');
-    _v('ec-rel2',c.relationship||'General');
-    const clientInts=(c.int||[]).map(i=>i.toLowerCase());
-    document.querySelectorAll('#ec-int-chips .int-chip, #ec-tag-chips .int-chip').forEach(el=>el.classList.toggle('on',clientInts.includes(el.textContent.toLowerCase())));
-    _v('ec-notes',c.notes||'');
-    _v('ec-dob',c.dob||'');
-    _v('ec-proxy',c.proxyContact||'');
-    const proxyRow=document.getElementById('ec-proxy-row');
-    if(proxyRow) proxyRow.style.display=c.relationship==='Proxy'?'':'none';
-    openModal('modal-edit-client');
-  }catch(e){
-    console.error('openEditClient error:',e);
-    openModal('modal-edit-client');
-  }
+  const c=CLIENTS.find(x=>x.id===id); if(!c) return;
+  editClientId=id;
+  document.getElementById('ec-name').value=c.name;
+  document.getElementById('ec-role').value=c.role||'';
+  document.getElementById('ec-city').value=c.city||'';
+  document.getElementById('ec-tier').value=c.tier;
+  document.getElementById('ec-nw').value=c.nw;
+  document.getElementById('ec-nat').value=c.nat||'';
+  document.getElementById('ec-rel').value=c.rel||'Unknown';
+  document.getElementById('ec-rel2').value=c.relationship||'General';
+  const clientInts=(c.int||[]).map(i=>i.toLowerCase());
+  document.querySelectorAll('#ec-int-chips .int-chip, #ec-tag-chips .int-chip').forEach(el=>el.classList.toggle('on',clientInts.includes(el.textContent.toLowerCase())));
+  document.getElementById('ec-notes').value=c.notes||'';
+  document.getElementById('ec-proxy').value=c.proxyContact||'';
+  document.getElementById('ec-proxy-row').style.display=c.relationship==='Proxy'?'':'none';
+  openEditPanel('ps-edit-client');
 }
 
 async function saveEditClient(){
   const c=CLIENTS.find(x=>x.id===editClientId); if(!c) return;
   const ints=[...document.querySelectorAll('#ec-int-chips .int-chip.on, #ec-tag-chips .int-chip.on')].map(el=>el.textContent);
-  // VIP is toggled via the star button, not the edit form — always preserve it
-  if(c.vip && !ints.includes('VIP')) ints.push('VIP');
-  const dobVal=document.getElementById('ec-dob')?.value||null;
   const updates={
     name:document.getElementById('ec-name').value.trim()||c.name,
     position:document.getElementById('ec-role').value.trim(),
@@ -1978,11 +1539,9 @@ async function saveEditClient(){
     notes:document.getElementById('ec-notes').value.trim(),
   };
   const {error}=await SB.from('clients').update(updates).eq('id',editClientId);
-  if(error){ console.error('saveEditClient error:',error); alert('Error: '+error.message); return; }
-  // Save dob separately — silently skip if column doesn't exist yet
-  if(dobVal!==undefined){ const {error:dobErr}=await SB.from('clients').update({dob:dobVal}).eq('id',editClientId); if(!dobErr) updates.dob=dobVal; }
+  if(error){ alert('Error: '+error.message); return; }
   Object.assign(c, normaliseClient({...updates, id:editClientId, last_wa:c.wa, last_call:c.call, last_meeting:c.meeting, follow_up_date:c.followUp, has_deal:c.deal, proxy_contact:updates.proxy_contact, dormant:c.dormant}));
-  closeModal('modal-edit-client');
+  closeEditPanel('ps-edit-client');
   openC(c);
   if(curTab==='clients') rClients();
   if(curTab==='home') rHome();
@@ -2000,7 +1559,6 @@ async function savePartner(){
     position:document.getElementById('np-role').value.trim(),
     country:document.getElementById('np-country').value.trim(),
     introduction_fee:document.getElementById('np-fee').value.trim(),
-    business_fees:document.getElementById('np-bizfee').value.trim(),
     notes:document.getElementById('np-notes').value.trim(),
     sort_order:PARTNERS.length
   };
@@ -2008,7 +1566,7 @@ async function savePartner(){
   if(error){ alert('Error: '+error.message); return; }
   PARTNERS.push(normalisePartner(data));
   closeModal('modal-partner');
-  ['np-name','np-contact','np-role','np-fee','np-bizfee','np-country','np-notes'].forEach(id=>document.getElementById(id).value='');
+  ['np-name','np-contact','np-role','np-fee','np-country','np-notes'].forEach(id=>document.getElementById(id).value='');
   rPartners(); updateHomeStats(); showToast('Partner added ✓');
 }
 
@@ -2022,7 +1580,6 @@ function openEditPartner(id){
   document.getElementById('ep-tier').value=p.tier;
   document.getElementById('ep-country').value=p.country||'';
   document.getElementById('ep-fee').value=p.fee||'';
-  document.getElementById('ep-bizfee').value=p.bizFee||'';
   document.getElementById('ep-notes').value=p.notes||'';
   openModal('modal-edit-partner');
 }
@@ -2037,12 +1594,11 @@ async function saveEditPartner(){
     crm_tier:document.getElementById('ep-tier').value,
     country:document.getElementById('ep-country').value.trim(),
     introduction_fee:document.getElementById('ep-fee').value.trim(),
-    business_fees:document.getElementById('ep-bizfee').value.trim(),
     notes:document.getElementById('ep-notes').value.trim(),
   };
   const {error}=await SB.from('partners').update(updates).eq('id',editPartnerId);
   if(error){ alert('Error: '+error.message); return; }
-  Object.assign(p, normalisePartner({...updates, id:editPartnerId, last_wa:p.wa, last_call:p.call, client_spend:p.spend, is_client:p.isC}));
+  Object.assign(p, normalisePartner({...updates, id:editPartnerId, last_wa:p.wa, last_call:p.call, business_fees:p.bizFee, client_spend:p.spend, is_client:p.isC}));
   closeModal('modal-edit-partner');
   openP(p); if(curTab==='partners') rPartners();
   showToast('Partner updated ✓');
@@ -2151,17 +1707,6 @@ Rules: open with [Name], warm luxury tone, 3-4 sentences max, no emojis unless c
   btn.disabled=false; btn.textContent='✦ Generate';
 }
 
-function updateDealCommDisplay(){
-  const partnerName=document.getElementById('nd-partner')?.value||'';
-  const v=parseFloat(document.getElementById('nd-value')?.value)||0;
-  const pct=calcDealPct(partnerName);
-  const el=document.getElementById('nd-comm-display'); if(!el) return;
-  if(!pct){ el.textContent='—'; el.title=''; return; }
-  const p=PARTNERS.find(x=>x.name===partnerName);
-  const label=`${p?.fee||''}${p?.bizFee?' × '+p.bizFee:''} = ${pct.toFixed(2)}%`;
-  el.textContent=v?`${fm(v*(pct/100))} (${pct.toFixed(2)}%)`:label;
-}
-
 // ── DEAL MODAL ────────────────────────────────────────────────────
 let dealTasks=[];
 
@@ -2176,7 +1721,6 @@ function openDealModal(presetClientId, editDealId){
   const tasksSection=document.getElementById('nd-tasks-section');
   const taskForm=document.getElementById('nd-task-form');
 
-  const delBtn=document.getElementById('deal-delete-btn');
   if(editDealId){
     const d=DEALS.find(x=>x.id===editDealId);
     if(d){
@@ -2185,25 +1729,23 @@ function openDealModal(presetClientId, editDealId){
       document.getElementById('nd-cat').value=d.cat;
       document.getElementById('nd-status').value=d.s;
       document.getElementById('nd-value').value=d.v;
+      document.getElementById('nd-pct').value=d.pct;
       document.getElementById('nd-notes').value=d.n;
       document.getElementById('deal-modal-title').textContent='Edit Deal';
       document.getElementById('deal-submit-btn').textContent='Save Changes';
     }
     tasksSection.style.display='block';
     taskForm.style.display='none';
-    if(delBtn) delBtn.style.display='block';
     loadDealTasks(editDealId);
   } else {
     document.getElementById('deal-modal-title').textContent='New Deal';
     document.getElementById('deal-submit-btn').textContent='Add Deal';
-    ['nd-value','nd-notes'].forEach(id=>document.getElementById(id).value='');
+    ['nd-value','nd-pct','nd-notes'].forEach(id=>document.getElementById(id).value='');
     tasksSection.style.display='none';
     taskForm.style.display='none';
-    if(delBtn) delBtn.style.display='none';
     dealTasks=[];
   }
   openModal('modal-deal');
-  setTimeout(updateDealCommDisplay, 50);
 }
 
 // ── DEAL TASKS ────────────────────────────────────────────────────
@@ -2214,8 +1756,6 @@ async function loadDealTasks(dealId){
   dealTasks=data||[];
   renderDealTasks();
 }
-
-let editingDealTaskId=null;
 
 function renderDealTasks(){
   const list=document.getElementById('nd-task-list'); if(!list) return;
@@ -2237,61 +1777,13 @@ function renderDealTasks(){
 
     const info=document.createElement('div');
     info.className='deal-task-info';
-    info.innerHTML=`<div class="deal-task-title-txt">${t.title}</div>${t.due_date?`<div class="deal-task-due">${fmtDealTaskDate(t.due_date)}</div>`:''}`;
-
-    const pencil=document.createElement('div');
-    pencil.className='atl-edit';
-    pencil.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
-    pencil.onclick=(e)=>{ e.stopPropagation(); openEditDealTask(t.id, t.title, t.due_date||'', false); };
+    info.innerHTML=`<div class="deal-task-title-txt">${t.title}</div>${t.due_date?`<div class="deal-task-due">${t.due_date}</div>`:''}`;
 
     item.appendChild(chk);
     item.appendChild(info);
-    item.appendChild(pencil);
     list.appendChild(item);
   });
 }
-
-function fmtDealTaskDate(d){
-  if(!d) return '';
-  const dt=new Date(d+'T12:00:00');
-  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
-}
-
-function openEditDealTask(id, title, dueDate, fromTimeline){
-  editingDealTaskId=id;
-  editingDealTaskFromTimeline=!!fromTimeline;
-  document.getElementById('edt-title').value=title||'';
-  document.getElementById('edt-due').value=dueDate||'';
-  openModal('modal-edit-deal-task');
-}
-
-async function saveEditDealTask(){
-  if(!editingDealTaskId) return;
-  const title=document.getElementById('edt-title').value.trim(); if(!title) return;
-  const due=document.getElementById('edt-due').value||null;
-  const {error}=await SB.from('deal_tasks').update({title,due_date:due}).eq('id',editingDealTaskId);
-  if(error){ showToast('Could not save task'); return; }
-  const t=dealTasks.find(x=>x.id===editingDealTaskId);
-  if(t){ t.title=title; t.due_date=due; }
-  closeModal('modal-edit-deal-task');
-  renderDealTasks();
-  if(editingDealTaskFromTimeline) renderDealTasksTimeline();
-  showToast('Task updated ✓');
-}
-
-async function deleteDealTask(){
-  if(!editingDealTaskId) return;
-  const {error}=await SB.from('deal_tasks').delete().eq('id',editingDealTaskId);
-  if(error){ showToast('Could not delete task'); return; }
-  dealTasks=dealTasks.filter(x=>x.id!==editingDealTaskId);
-  closeModal('modal-edit-deal-task');
-  renderDealTasks();
-  if(editingDealTaskFromTimeline) renderDealTasksTimeline();
-  showToast('Task deleted');
-}
-
-let editingDealTaskFromTimeline=false;
 
 
 
@@ -2323,16 +1815,15 @@ async function toggleDealTask(id,done){
 
 async function saveDeal(){
   const v=parseFloat(document.getElementById('nd-value').value);
+  const pct=parseFloat(document.getElementById('nd-pct').value);
   if(!v||isNaN(v)){ alert('Please enter a deal value.'); return; }
-  const partnerName=document.getElementById('nd-partner').value;
-  const pct=calcDealPct(partnerName);
   const clientId=document.getElementById('nd-client').value;
   const row={
     client_id:clientId,
-    partner:partnerName,
+    partner:document.getElementById('nd-partner').value,
     category:document.getElementById('nd-cat').value,
     status:document.getElementById('nd-status').value,
-    spend:v, commission_rate:pct,
+    spend:v, commission_rate:isNaN(pct)?0.6:pct,
     notes:document.getElementById('nd-notes').value.trim(),
   };
 
@@ -2354,19 +1845,6 @@ async function saveDeal(){
   closeModal('modal-deal');
   if(curTab==='deals') rDeals(); if(curTab==='home') rHome();
   updateHomeStats();
-}
-
-async function deleteDeal(){
-  if(!editingDealId) return;
-  // Delete all tasks for this deal, then the deal itself
-  await SB.from('deal_tasks').delete().eq('deal_id',editingDealId);
-  const {error}=await SB.from('deals').delete().eq('id',editingDealId);
-  if(error){ showToast('Could not delete deal'); return; }
-  DEALS=DEALS.filter(x=>x.id!==editingDealId);
-  closeModal('modal-deal');
-  showToast('Deal deleted');
-  if(curTab==='deals') rDeals();
-  rHome(); updateHomeStats();
 }
 
 // ── WHATSAPP ──────────────────────────────────────────────────────
@@ -2433,6 +1911,15 @@ function copyWaMsg(){
 function closeWaSheet(e){ if(e.target===document.getElementById('wa-sheet-overlay')) document.getElementById('wa-sheet-overlay').classList.remove('open'); }
 
 // ── UTILS ─────────────────────────────────────────────────────────
+const MONTHS_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtCamDate(d){
+  if(!d||d==='TBC'||d==='Ongoing') return d||'';
+  try{
+    const [y,m,day]=d.split('-').map(Number);
+    return `${day} ${MONTHS_SHORT[m-1]} ${y}`;
+  }catch(e){ return d; }
+}
+
 function updateHomeStats(){
   const tc=DEALS.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
   document.getElementById('qs-pipe').textContent=fm(tc);
