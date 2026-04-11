@@ -1662,6 +1662,43 @@ async function saveScheduleMeeting(){
   showToast('Meeting scheduled ✓');
 }
 
+async function toggleVip(clientId){
+  const c=CLIENTS.find(x=>x.id===clientId); if(!c) return;
+  if(c.vip){
+    c.int=c.int.filter(i=>i!=='VIP');
+    c.vip=false;
+  } else {
+    c.int=[...c.int,'VIP'];
+    c.vip=true;
+  }
+  const {error:vipErr}=await SB.from('clients').update({interests:c.int}).eq('id',clientId);
+  if(vipErr){ console.error('VIP save error:',vipErr); showToast('Save failed: '+vipErr.message); return; }
+  rClients();
+  openC(c);
+  showToast(c.vip?'VIP status added ✓':'VIP status removed');
+}
+
+let scheduleMeetingClientId=null;
+function openScheduleMeeting(clientId, clientName){
+  scheduleMeetingClientId=clientId;
+  document.getElementById('schedule-meeting-client').textContent=clientName;
+  document.getElementById('schedule-meeting-title').value='';
+  document.getElementById('schedule-meeting-date').value='';
+  openModal('modal-schedule-meeting');
+}
+async function saveScheduleMeeting(){
+  if(!scheduleMeetingClientId) return;
+  const title=document.getElementById('schedule-meeting-title').value.trim();
+  const date=document.getElementById('schedule-meeting-date').value;
+  if(!date){ showToast('Please set a date'); return; }
+  const {data,error}=await SB.from('client_meetings').insert({client_id:scheduleMeetingClientId,title:title||null,due_date:date,done:false}).select().single();
+  if(error){ console.error('client_meetings error:',error); showToast('Could not save — run SQL in Supabase'); return; }
+  MEETINGS.push(data);
+  closeModal('modal-schedule-meeting');
+  rHome();
+  showToast('Meeting scheduled ✓');
+}
+
 // ── PARTNERS ──────────────────────────────────────────────────────
 function rPartners(){
   let list=cF==='All'?[...PARTNERS]:[...PARTNERS.filter(p=>p.cat===cF)];
