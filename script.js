@@ -20,11 +20,11 @@ const CC = {'Follow-Up':'p-blu', Seasonal:'p-amb', Mandate:'p-gold', Event:'p-bl
 
 // ── RELATIONSHIP CADENCES ─────────────────────────────────────────
 const DEFAULT_REL_CADENCES = {
-  Personal: {waD:14, cD:30,  label:'Personal', p:1},
-  Close:    {waD:28, cD:null,label:'Close',    p:2},
-  General:  {waD:28, cD:null,label:'General',  p:3},
-  Proxy:    {waD:56, cD:null,label:'Proxy',    p:4},
-  Archive:  {waD:84, cD:null,label:'Archive',  p:5},
+  Personal: {waD:14, cD:30, mD:60, label:'Personal', p:1},
+  Close:    {waD:28, cD:null,      label:'Close',    p:2},
+  General:  {waD:28, cD:null,      label:'General',  p:3},
+  Proxy:    {waD:56, cD:null,      label:'Proxy',    p:4},
+  Archive:  {waD:84, cD:null,      label:'Archive',  p:5},
 };
 let REL_CADENCES = {};
 function loadRelCadences(){
@@ -96,10 +96,11 @@ function normaliseClient(r){
     id: r.id, name: r.name, role: r.position||'', nat: r.nationality||'',
     city: r.city||'', tier: r.tier||'Active', nw: r.net_worth||'HNWI',
     rel: r.religion||'Unknown', int: r.interests||[], notes: r.notes||'',
-    wa: r.last_wa||null, call: r.last_call||null,
+    wa: r.last_wa||null, call: r.last_call||null, meeting: r.last_meeting||null,
     followUp: r.follow_up_date||null, deal: r.has_deal||false,
     relationship: r.relationship||'',
     proxyContact: r.proxy_contact||'',
+    dormant: r.dormant||false,
   };
 }
 function normalisePartner(r){
@@ -179,8 +180,8 @@ function getSegmentMatchedClients(cam){
 function getCampaignClients(cam){
   const segIds=getSegmentMatchedClients(cam);
   const excludedIds=new Set(cam.manualExcludedIds||[]);
-  // Segment matches minus excluded
-  let filtered=CLIENTS.filter(c=>segIds.includes(c.id)&&!excludedIds.has(c.id));
+  // Segment matches minus excluded and dormant
+  let filtered=CLIENTS.filter(c=>segIds.includes(c.id)&&!excludedIds.has(c.id)&&!c.dormant);
   // Add manual clients (always included, even if they'd otherwise be excluded)
   if(cam.manualClientIds && cam.manualClientIds.length){
     const existing=new Set(filtered.map(c=>c.id));
@@ -254,6 +255,18 @@ function mkTasks(){
         why:wa===9999?'Never contacted · '+c.relationship+' relationship':`${wa}d since last message · due every ${rel.waD}d`,
         urg:ov>7?'urgent':ov>=0?'soon':'normal', pri:rel.p*10+(c.deal?0:5)});
     }
+  });
+
+  // Meeting pass: clients whose relationship cadence has a meeting interval (mD)
+  CLIENTS.forEach(c=>{
+    const rel=REL_CADENCES[c.relationship];
+    if(!rel||!rel.mD||c.relationship==='Archive') return;
+    const mt=daysSince(c.meeting);
+    if(mt<rel.mD) return;
+    const ov=mt-rel.mD;
+    t.push({id:'meet-'+c.id, nm:c.name, act:'Personal meeting with '+c.name,
+      why:mt===9999?'No meeting recorded · due every '+rel.mD+'d':`${mt}d since last meeting · due every ${rel.mD}d`,
+      urg:ov>14?'urgent':ov>=0?'soon':'normal', pri:rel.p*10-1+(c.deal?0:5)});
   });
 
   return t.sort((a,b)=>({urgent:0,soon:1,normal:2}[a.urg]||2)-({urgent:0,soon:1,normal:2}[b.urg]||2)||a.pri-b.pri);
@@ -340,10 +353,12 @@ function rHome(){
         };
       } else {
         const isCall=t.id.startsWith('cl-');
-        const client=CLIENTS.find(c=>'wa-'+c.id===t.id||'cl-'+c.id===t.id);
+        const isMeet=t.id.startsWith('meet-');
+        const client=CLIENTS.find(c=>'wa-'+c.id===t.id||'cl-'+c.id===t.id||'meet-'+c.id===t.id);
         if(client){
           el.onclick=(e)=>{ if(e.target.closest('.chk')) return;
             if(isCall) logCall(client);
+            else if(isMeet) logMeeting(client);
             else openWaSheet(client,null);
           };
         }
@@ -1140,6 +1155,10 @@ async function openC(c){
         <span class="pill p-gh">${c.rel}</span>
         ${c.relationship?`<span class="pill p-gh">${c.relationship}</span>`:''}
       </div>
+      ${c.tier==='Sleeper'?`<button class="dormant-btn${c.dormant?' on':''}" onclick="toggleDormant('${c.id}')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="${c.dormant?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        ${c.dormant?'Dormant · excluded from campaigns':'Mark dormant · pause campaigns'}
+      </button>`:''}
     </div>
     ${c.relationship==='Proxy'&&c.proxyContact?`<div class="prof-sec" style="padding:12px 18px;margin-bottom:10px;display:flex;align-items:center;gap:10px;background:rgba(138,109,62,0.06);border-color:var(--gold-border)"><div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--t3);flex-shrink:0">Via Proxy</div><div style="font-size:13px;font-weight:600;color:var(--t1)">${c.proxyContact}</div></div>`:''}
     <div class="prof-sec">
@@ -1215,12 +1234,23 @@ async function logWa(c){
 async function logMeeting(c){
   if(!c) return;
   const now=new Date();
+  const today=now.toISOString().split('T')[0];
+  await SB.from('clients').update({last_meeting:today}).eq('id',c.id);
+  c.meeting=today;
   const {data:actData,error:actErr}=await SB.from('client_activities').insert({client_id:c.id,type:'meeting',occurred_at:now.toISOString()}).select().single();
   if(actErr){ console.error('client_activities insert error:',actErr); return; }
   if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
-  showToast('Meeting logged ✓');
+  rHome(); if(curTab==='clients') rClients(); showToast('Meeting logged ✓');
+}
+
+async function toggleDormant(id){
+  const c=CLIENTS.find(x=>x.id===id); if(!c) return;
+  c.dormant=!c.dormant;
+  await SB.from('clients').update({dormant:c.dormant}).eq('id',id);
+  openC(c);
+  showToast(c.dormant?'Marked dormant ✓':'Removed dormant ✓');
 }
 
 // ── PARTNERS ──────────────────────────────────────────────────────
@@ -1510,7 +1540,7 @@ async function saveEditClient(){
   };
   const {error}=await SB.from('clients').update(updates).eq('id',editClientId);
   if(error){ alert('Error: '+error.message); return; }
-  Object.assign(c, normaliseClient({...updates, id:editClientId, last_wa:c.wa, last_call:c.call, follow_up_date:c.followUp, has_deal:c.deal, proxy_contact:updates.proxy_contact}));
+  Object.assign(c, normaliseClient({...updates, id:editClientId, last_wa:c.wa, last_call:c.call, last_meeting:c.meeting, follow_up_date:c.followUp, has_deal:c.deal, proxy_contact:updates.proxy_contact, dormant:c.dormant}));
   closeEditPanel('ps-edit-client');
   openC(c);
   if(curTab==='clients') rClients();
