@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Albemarle Private</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="stylesheet" href="styles.css?v=20260410d">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -83,8 +86,14 @@
         <div class="qs"><div class="qs-n" id="d-sg-tent-v">$0</div><div class="qs-cnt" id="d-sg-tent-n">0 deals</div><div class="qs-l">Tentative</div></div>
         <div class="qs"><div class="qs-n" id="d-sg-wait-v">$0</div><div class="qs-cnt" id="d-sg-wait-n">0 deals</div><div class="qs-l">Waiting</div></div>
       </div>
-      <div class="sl" style="margin-bottom:11px">All Deals</div>
-      <div class="deal-cards" id="deal-list"></div>
+      <div class="home-toggle" style="margin:0 16px 14px">
+        <div class="home-toggle-btn on" data-tab="deals" onclick="switchDealTab('deals')">Deals</div>
+        <div class="home-toggle-btn" data-tab="tasks" onclick="switchDealTab('tasks')">Tasks</div>
+      </div>
+      <div id="deal-list-wrap">
+        <div class="deal-cards" id="deal-list"></div>
+      </div>
+      <div id="deal-tasks-timeline" style="display:none;padding:0 16px"></div>
       <div style="height:24px"></div>
     </div>
 
@@ -98,6 +107,7 @@
           </button>
         </div>
       </div>
+      <div class="cli-stats-row" id="cam-stats" style="padding:0 16px 14px"></div>
       <div class="cam-cards" id="cam-list"></div>
       <div style="height:24px"></div>
     </div>
@@ -172,66 +182,6 @@
     <div class="prof-screen" id="ps-client"><div class="prof-wrap" id="ps-client-body"></div></div>
     <div class="prof-screen" id="ps-partner"><div class="prof-wrap" id="ps-partner-body"></div></div>
     <div class="prof-screen" id="ps-campaign"><div class="prof-wrap" id="ps-campaign-body"></div></div>
-    <div class="prof-screen" id="ps-edit-client" style="z-index:60">
-      <div class="prof-wrap">
-        <div class="prof-back-row">
-          <div class="prof-back" onclick="closeEditPanel('ps-edit-client')">
-            <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 1L1 7l6 6"/></svg><span>Client</span>
-          </div>
-        </div>
-        <div class="modal-title" style="padding:8px 0 10px">Edit Client</div>
-        <div class="form-body">
-          <div class="form-row">
-            <div class="form-field"><label>Full Name</label><input type="text" id="ec-name"></div>
-            <div class="form-field"><label>Position / Role</label><input type="text" id="ec-role"></div>
-          </div>
-          <div class="form-row">
-            <div class="form-field"><label>City</label><input type="text" id="ec-city"></div>
-            <div class="form-field"><label>Tier</label>
-              <select id="ec-tier"><option>Top</option><option>Active</option><option>Warm</option><option>Sleeper</option></select>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-field"><label>Net Worth</label>
-              <select id="ec-nw"><option>Billionaire</option><option>Centimillionaire</option><option>HNWI</option></select>
-            </div>
-            <div class="form-field"><label>Nationality</label><input type="text" id="ec-nat"></div>
-          </div>
-          <div class="form-row">
-            <div class="form-field"><label>Religion</label>
-              <select id="ec-rel"><option>Unknown</option><option>Muslim</option><option>Christian</option><option>Hindu</option><option>Jewish</option><option>Other</option></select>
-            </div>
-            <div class="form-field"><label>Relationship</label>
-              <select id="ec-rel2" onchange="document.getElementById('ec-proxy-row').style.display=this.value==='Proxy'?'':'none'"><option>Personal</option><option>General</option><option>Proxy</option><option>Archive</option></select>
-            </div>
-          </div>
-          <div class="form-field" id="ec-proxy-row" style="display:none">
-            <label>Proxy Contact Name</label>
-            <input type="text" id="ec-proxy" placeholder="e.g. Hassan Al-Farsi (assistant)">
-          </div>
-          <div class="form-field"><label>Interests</label>
-            <div class="int-chips" id="ec-int-chips">
-              <div class="int-chip" onclick="this.classList.toggle('on')">Real Estate</div>
-              <div class="int-chip" onclick="this.classList.toggle('on')">Dior</div>
-              <div class="int-chip" onclick="this.classList.toggle('on')">Luxury</div>
-              <div class="int-chip" onclick="this.classList.toggle('on')">Fine Jewellery</div>
-              <div class="int-chip" onclick="this.classList.toggle('on')">The Luxury Collective</div>
-              <div class="int-chip" onclick="this.classList.toggle('on')">Connector</div>
-            </div>
-          </div>
-          <div class="form-field"><label>Tags</label>
-            <div class="int-chips" id="ec-tag-chips">
-              <div class="int-chip" onclick="this.classList.toggle('on')">High Potential</div>
-            </div>
-          </div>
-          <div class="form-field"><label>Notes</label><textarea id="ec-notes"></textarea></div>
-        </div>
-        <div class="form-footer">
-          <button class="form-submit" onclick="saveEditClient()">Save Changes</button>
-          <div class="form-cancel" onclick="closeEditPanel('ps-edit-client')">Cancel</div>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- TAB BAR -->
@@ -343,6 +293,7 @@
           <div class="int-chip" onclick="this.classList.toggle('on')">High Potential</div>
         </div>
       </div>
+      <div class="form-field"><label>Birthday (optional)</label><input type="date" id="nc-dob"></div>
       <div class="form-field"><label>Notes</label><textarea id="nc-notes" placeholder="Key context about this client…"></textarea></div>
     </div>
     <div class="form-footer">
@@ -353,6 +304,63 @@
 </div>
 
 <!-- EDIT CLIENT -->
+<div class="modal-overlay" id="modal-edit-client" onclick="closeModalOut(event,'modal-edit-client')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Edit Client</div>
+    <div class="form-body">
+      <div class="form-row">
+        <div class="form-field"><label>Full Name</label><input type="text" id="ec-name"></div>
+        <div class="form-field"><label>Position / Role</label><input type="text" id="ec-role"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>City</label><input type="text" id="ec-city"></div>
+        <div class="form-field"><label>Tier</label>
+          <select id="ec-tier"><option>Top</option><option>Active</option><option>Warm</option><option>Sleeper</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>Net Worth</label>
+          <select id="ec-nw"><option>Billionaire</option><option>Centimillionaire</option><option>HNWI</option></select>
+        </div>
+        <div class="form-field"><label>Nationality</label><input type="text" id="ec-nat"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>Religion</label>
+          <select id="ec-rel"><option>Unknown</option><option>Muslim</option><option>Christian</option><option>Hindu</option><option>Jewish</option><option>Other</option></select>
+        </div>
+        <div class="form-field"><label>Relationship</label>
+          <select id="ec-rel2" onchange="document.getElementById('ec-proxy-row').style.display=this.value==='Proxy'?'':'none'"><option>Personal</option><option>General</option><option>Proxy</option><option>Archive</option></select>
+        </div>
+      </div>
+      <div class="form-field" id="ec-proxy-row" style="display:none">
+        <label>Proxy Contact Name</label>
+        <input type="text" id="ec-proxy" placeholder="e.g. Hassan Al-Farsi (assistant)">
+      </div>
+      <div class="form-field"><label>Interests</label>
+        <div class="int-chips" id="ec-int-chips">
+          <div class="int-chip" onclick="this.classList.toggle('on')">Real Estate</div>
+          <div class="int-chip" onclick="this.classList.toggle('on')">Dior</div>
+          <div class="int-chip" onclick="this.classList.toggle('on')">Luxury</div>
+          <div class="int-chip" onclick="this.classList.toggle('on')">Fine Jewellery</div>
+          <div class="int-chip" onclick="this.classList.toggle('on')">The Luxury Collective</div>
+          <div class="int-chip" onclick="this.classList.toggle('on')">Connector</div>
+        </div>
+      </div>
+      <div class="form-field"><label>Tags</label>
+        <div class="int-chips" id="ec-tag-chips">
+          <div class="int-chip" onclick="this.classList.toggle('on')">High Potential</div>
+        </div>
+      </div>
+      <div class="form-field"><label>Birthday (optional)</label><input type="date" id="ec-dob"></div>
+      <div class="form-field"><label>Notes</label><textarea id="ec-notes"></textarea></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveEditClient()">Save Changes</button>
+      <div class="form-cancel" onclick="closeModal('modal-edit-client')">Cancel</div>
+    </div>
+  </div>
+</div>
 
 <!-- NEW PARTNER -->
 <div class="modal-overlay" id="modal-partner" onclick="closeModalOut(event,'modal-partner')">
@@ -375,7 +383,11 @@
       </div>
       <div class="form-row">
         <div class="form-field"><label>Country</label><input type="text" id="np-country" placeholder="e.g. UAE"></div>
-        <div class="form-field"><label>Introduction Fee</label><input type="text" id="np-fee" placeholder="e.g. 30%"></div>
+        <div class="form-field"><label>Ref. Fee</label><input type="text" id="np-fee" placeholder="e.g. 30%"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>Bus. Fee</label><input type="text" id="np-bizfee" placeholder="e.g. 10%"></div>
+        <div class="form-field"></div>
       </div>
       <div class="form-field"><label>Notes</label><textarea id="np-notes" placeholder="Partnership details…"></textarea></div>
     </div>
@@ -407,7 +419,11 @@
       </div>
       <div class="form-row">
         <div class="form-field"><label>Country</label><input type="text" id="ep-country"></div>
-        <div class="form-field"><label>Introduction Fee</label><input type="text" id="ep-fee"></div>
+        <div class="form-field"><label>Ref. Fee</label><input type="text" id="ep-fee"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>Bus. Fee</label><input type="text" id="ep-bizfee"></div>
+        <div class="form-field"></div>
       </div>
       <div class="form-field"><label>Notes</label><textarea id="ep-notes"></textarea></div>
     </div>
@@ -427,7 +443,7 @@
       <div class="form-field"><label>Campaign Title</label><input type="text" id="ncam-name" placeholder="Campaign name"></div>
       <div class="form-row">
         <div class="form-field"><label>Type</label>
-          <select id="ncam-type"><option>Follow-Up</option><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
+          <select id="ncam-type"><option>Follow-Up</option><option>WhatsApp</option><option>Calling</option><option>Personal</option><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
         </div>
         <div class="form-field"><label>Date</label><input type="text" id="ncam-date" placeholder="e.g. 20 Apr 2026"></div>
       </div>
@@ -478,7 +494,7 @@
       <div class="form-field"><label>Campaign Title</label><input type="text" id="ecam-name"></div>
       <div class="form-row">
         <div class="form-field"><label>Type</label>
-          <select id="ecam-type"><option>Follow-Up</option><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
+          <select id="ecam-type"><option>Follow-Up</option><option>WhatsApp</option><option>Calling</option><option>Personal</option><option>Seasonal</option><option>Mandate</option><option>Event</option><option>Ongoing</option><option>Triggered</option></select>
         </div>
         <div class="form-field"><label>Date</label><input type="text" id="ecam-date"></div>
       </div>
@@ -528,7 +544,7 @@
     <div class="form-body">
       <div class="form-row">
         <div class="form-field"><label>Client</label><select id="nd-client"></select></div>
-        <div class="form-field"><label>Partner</label><select id="nd-partner"></select></div>
+        <div class="form-field"><label>Partner</label><select id="nd-partner" onchange="updateDealCommDisplay()"></select></div>
       </div>
       <div class="form-row">
         <div class="form-field"><label>Category</label>
@@ -539,8 +555,8 @@
         </div>
       </div>
       <div class="form-row">
-        <div class="form-field"><label>Deal Value (£/$)</label><input type="number" id="nd-value" placeholder="e.g. 5000000"></div>
-        <div class="form-field"><label>Commission Rate (%)</label><input type="number" id="nd-pct" step="0.1" placeholder="e.g. 0.6"></div>
+        <div class="form-field"><label>Deal Value (£/$)</label><input type="number" id="nd-value" placeholder="e.g. 5000000" oninput="updateDealCommDisplay()"></div>
+        <div class="form-field"><label>My Commission</label><div id="nd-comm-display" style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--gold);font-weight:300;padding:6px 0">—</div></div>
       </div>
       <div class="form-field"><label>Notes</label><input type="text" id="nd-notes" placeholder="e.g. Largest deal in pipeline"></div>
       <div id="nd-tasks-section" style="display:none">
@@ -558,7 +574,25 @@
     </div>
     <div class="form-footer">
       <button class="form-submit" id="deal-submit-btn" onclick="saveDeal()">Add Deal</button>
+      <button class="form-danger" id="deal-delete-btn" onclick="deleteDeal()" style="display:none">Delete Deal</button>
       <div class="form-cancel" onclick="closeModal('modal-deal')">Cancel</div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT DEAL TASK -->
+<div class="modal-overlay" id="modal-edit-deal-task" onclick="closeModalOut(event,'modal-edit-deal-task')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Edit Task</div>
+    <div class="form-body">
+      <div class="form-field"><label>Task</label><input type="text" id="edt-title" placeholder="Task title…"></div>
+      <div class="form-field"><label>Due Date (optional)</label><input type="date" id="edt-due"></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveEditDealTask()">Save Changes</button>
+      <button class="form-danger" onclick="deleteDealTask()">Delete Task</button>
+      <div class="form-cancel" onclick="closeModal('modal-edit-deal-task')">Cancel</div>
     </div>
   </div>
 </div>
@@ -696,6 +730,7 @@
       <div class="filter-section">
         <div class="filter-sec-lbl">Tags</div>
         <div class="filter-chips-wrap">
+          <div class="fchip" data-group="tag" data-val="VIP" onclick="toggleFChip(this)">VIP</div>
           <div class="fchip" data-group="tag" data-val="High Potential" onclick="toggleFChip(this)">High Potential</div>
         </div>
       </div>
@@ -709,6 +744,57 @@
 </div>
 
 
-<script src="script.js" defer></script>
+<!-- RESCHEDULE TASK -->
+<div class="modal-overlay" id="modal-reschedule-task" onclick="closeModalOut(event,'modal-reschedule-task')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Reschedule Task</div>
+    <div class="form-body">
+      <div class="form-field"><div id="reschedule-task-name" style="font-size:14px;font-weight:600;color:var(--t1)"></div></div>
+      <div class="form-field"><label>New Due Date</label><input type="date" id="reschedule-date"></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveRescheduleTask()">Save</button>
+      <div class="form-cancel" onclick="closeModal('modal-reschedule-task')">Cancel</div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT ACTIVITY -->
+<div class="modal-overlay" id="modal-edit-activity" onclick="closeModalOut(event,'modal-edit-activity')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Edit Activity</div>
+    <div class="form-body">
+      <div class="form-field"><div id="edit-act-type" style="font-size:13px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:0.1em"></div></div>
+      <div class="form-field"><label>Date</label><input type="date" id="edit-act-date"></div>
+      <div class="form-field"><label>Notes (optional)</label><input type="text" id="edit-act-notes" placeholder="Add a note…"></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveEditActivity()">Save</button>
+      <button class="form-danger" onclick="deleteActivity()">Delete Activity</button>
+      <div class="form-cancel" onclick="closeModal('modal-edit-activity')">Cancel</div>
+    </div>
+  </div>
+</div>
+
+<!-- SCHEDULE MEETING -->
+<div class="modal-overlay" id="modal-schedule-meeting" onclick="closeModalOut(event,'modal-schedule-meeting')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Schedule Meeting</div>
+    <div class="form-body">
+      <div class="form-field"><div id="schedule-meeting-client" style="font-size:14px;font-weight:600;color:var(--t1)"></div></div>
+      <div class="form-field"><label>Meeting Title (optional)</label><input type="text" id="schedule-meeting-title" placeholder="e.g. Lunch at Claridge's"></div>
+      <div class="form-field"><label>Due Date</label><input type="date" id="schedule-meeting-date"></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveScheduleMeeting()">Schedule</button>
+      <div class="form-cancel" onclick="closeModal('modal-schedule-meeting')">Cancel</div>
+    </div>
+  </div>
+</div>
+
+<script src="script.js?v=20260410d" defer></script>
 </body>
 </html>
