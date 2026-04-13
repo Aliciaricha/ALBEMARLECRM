@@ -92,11 +92,10 @@ async function loadAll(){
 }
 
 function normaliseClient(r){
-  const interests=r.interests||[];
   return {
     id: r.id, name: r.name, role: r.position||'', nat: r.nationality||'',
     city: r.city||'', tier: r.tier||'Active', nw: r.net_worth||'HNWI',
-    rel: r.religion||'Unknown', int: interests, notes: r.notes||'',
+    rel: r.religion||'Unknown', int: r.interests||[], notes: r.notes||'',
     wa: r.last_wa||null, call: r.last_call||null, meeting: r.last_meeting||null,
     followUp: r.follow_up_date||null, deal: r.has_deal||false,
     relationship: r.relationship||'',
@@ -903,15 +902,15 @@ function rClients(){
 
   // Stats
   const total=CLIENTS.length;
-  const vips=CLIENTS.filter(c=>c.vip).length;
   const billionaires=CLIENTS.filter(c=>c.nw==='Billionaire').length;
   const centimillionaires=CLIENTS.filter(c=>c.nw==='Centimillionaire').length;
+  const activeRels=CLIENTS.filter(c=>c.relationship&&c.relationship!=='Archive').length;
   const statsEl=document.getElementById('cli-stats');
   if(statsEl) statsEl.innerHTML=`
     <div class="cli-stat"><div class="cli-stat-n">${total}</div><div class="cli-stat-l">Total</div></div>
-    <div class="cli-stat"><div class="cli-stat-n g">${vips}</div><div class="cli-stat-l">VIPs</div></div>
-    <div class="cli-stat"><div class="cli-stat-n">${billionaires}</div><div class="cli-stat-l">Billionaires</div></div>
+    <div class="cli-stat"><div class="cli-stat-n g">${billionaires}</div><div class="cli-stat-l">Billionaires</div></div>
     <div class="cli-stat"><div class="cli-stat-n">${centimillionaires}</div><div class="cli-stat-l">Centimilli.</div></div>
+    <div class="cli-stat"><div class="cli-stat-n">${activeRels}</div><div class="cli-stat-l">Active</div></div>
   `;
 
   // Active filter pills
@@ -956,7 +955,7 @@ function rClients(){
     const wa=daysSince(c.wa), cl=daysSince(c.call);
     const clOv=rel?.cD&&cl>=rel.cD, waOv=rel?.waD&&wa>=rel.waD;
     const div=document.createElement('div');
-    div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
+    div.className='pc gc a'; div.style.animationDelay=(i*0.04)+'s';
     div.onclick=()=>openC(c);
     div.innerHTML=`<div class="pc-av">${ini(c.name)}${c.vip?'<div class="pc-vip-star"><svg width="9" height="9" viewBox="0 0 24 24" fill="var(--gold)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>':c.deal?'<div class="dot"></div>':''}</div>
   <div class="pc-info">
@@ -1177,6 +1176,10 @@ async function openC(c){
         <span class="pill p-gh">${c.rel}</span>
         ${c.relationship?`<span class="pill p-gh">${c.relationship}</span>`:''}
       </div>
+      ${c.tier==='Sleeper'?`<button class="dormant-btn${c.dormant?' on':''}" onclick="toggleDormant('${c.id}')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="${c.dormant?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        ${c.dormant?'Dormant · excluded from campaigns':'Mark dormant · pause campaigns'}
+      </button>`:''}
     </div>
     ${c.relationship==='Proxy'&&c.proxyContact?`<div class="prof-sec" style="padding:12px 18px;margin-bottom:10px;display:flex;align-items:center;gap:10px;background:rgba(138,109,62,0.06);border-color:var(--gold-border)"><div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--t3);flex-shrink:0">Via Proxy</div><div style="font-size:13px;font-weight:600;color:var(--t1)">${c.proxyContact}</div></div>`:''}
     <div class="prof-sec">
