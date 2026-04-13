@@ -92,10 +92,11 @@ async function loadAll(){
 }
 
 function normaliseClient(r){
+  const interests=r.interests||[];
   return {
     id: r.id, name: r.name, role: r.position||'', nat: r.nationality||'',
     city: r.city||'', tier: r.tier||'Active', nw: r.net_worth||'HNWI',
-    rel: r.religion||'Unknown', int: r.interests||[], notes: r.notes||'',
+    rel: r.religion||'Unknown', int: interests, notes: r.notes||'',
     wa: r.last_wa||null, call: r.last_call||null, meeting: r.last_meeting||null,
     followUp: r.follow_up_date||null, deal: r.has_deal||false,
     relationship: r.relationship||'',
