@@ -497,17 +497,6 @@ async function saveRescheduleTask(){
   showToast('Task rescheduled ✓');
 }
 
-async function deleteDealTask(id, source){
-  const {error}=await SB.from('deal_tasks').delete().eq('id',id);
-  if(error){ showToast('Could not delete task'); return; }
-  if(source==='modal'){
-    dealTasks=dealTasks.filter(t=>t.id!==id);
-    renderDealTasks(); showToast('Task deleted');
-  } else {
-    homeDealTasks=(homeDealTasks||[]).filter(t=>t.id!==id);
-    renderHomeDealTasks(); showToast('Task deleted');
-  }
-}
 
 async function tickDealTask(id,el,e){
   e.stopPropagation();
