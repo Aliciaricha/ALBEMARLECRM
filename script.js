@@ -956,7 +956,7 @@ function rClients(){
     const wa=daysSince(c.wa), cl=daysSince(c.call);
     const clOv=rel?.cD&&cl>=rel.cD, waOv=rel?.waD&&wa>=rel.waD;
     const div=document.createElement('div');
-    div.className='pc gc a'; div.style.animationDelay=(i*0.04)+'s';
+    div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
     div.onclick=()=>openC(c);
     div.innerHTML=`<div class="pc-av">${ini(c.name)}${c.vip?'<div class="pc-vip-star"><svg width="9" height="9" viewBox="0 0 24 24" fill="var(--gold)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>':c.deal?'<div class="dot"></div>':''}</div>
   <div class="pc-info">
