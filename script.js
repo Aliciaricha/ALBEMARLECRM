@@ -102,7 +102,7 @@ function normaliseClient(r){
     relationship: r.relationship||'',
     proxyContact: r.proxy_contact||'',
     dormant: r.dormant||false,
-    vip: interests.includes('VIP'),
+    vip: r.vip||false,
   };
 }
 function normalisePartner(r){
@@ -958,7 +958,7 @@ function rClients(){
     const div=document.createElement('div');
     div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
     div.onclick=()=>openC(c);
-    div.innerHTML=`<div class="pc-av">${ini(c.name)}${c.vip?'<div class="pc-vip-star"><svg width="9" height="9" viewBox="0 0 24 24" fill="var(--gold)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>':c.deal?'<div class="dot"></div>':''}</div>
+    div.innerHTML=`<div class="pc-av">${ini(c.name)}${c.vip?'<svg class="pc-av-star" width="9" height="9" viewBox="0 0 24 24" fill="var(--gold)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>':c.deal?'<div class="dot"></div>':''}</div>
   <div class="pc-info">
     <div class="pc-name">${c.name}</div>
     <div class="pc-sub">${c.role||c.city||''}</div>
@@ -1285,9 +1285,8 @@ async function toggleDormant(id){
 
 async function toggleVip(id){
   const c=CLIENTS.find(x=>x.id===id); if(!c) return;
-  if(c.vip){ c.int=c.int.filter(i=>i!=='VIP'); c.vip=false; }
-  else { c.int=[...c.int,'VIP']; c.vip=true; }
-  const {error}=await SB.from('clients').update({interests:c.int}).eq('id',id);
+  c.vip=!c.vip;
+  const {error}=await SB.from('clients').update({vip:c.vip}).eq('id',id);
   if(error){ console.error('VIP save error:',error); showToast('Save failed'); return; }
   rClients();
   openC(c);
@@ -1566,8 +1565,6 @@ function openEditClient(id){
 async function saveEditClient(){
   const c=CLIENTS.find(x=>x.id===editClientId); if(!c) return;
   const ints=[...document.querySelectorAll('#ec-int-chips .int-chip.on, #ec-tag-chips .int-chip.on')].map(el=>el.textContent);
-  // VIP is toggled via the star button — always preserve it from the edit form
-  if(c.vip && !ints.includes('VIP')) ints.push('VIP');
   const updates={
     name:document.getElementById('ec-name').value.trim()||c.name,
     position:document.getElementById('ec-role').value.trim(),
@@ -1583,7 +1580,7 @@ async function saveEditClient(){
   };
   const {error}=await SB.from('clients').update(updates).eq('id',editClientId);
   if(error){ alert('Error: '+error.message); return; }
-  Object.assign(c, normaliseClient({...updates, id:editClientId, last_wa:c.wa, last_call:c.call, last_meeting:c.meeting, follow_up_date:c.followUp, has_deal:c.deal, proxy_contact:updates.proxy_contact, dormant:c.dormant}));
+  Object.assign(c, normaliseClient({...updates, id:editClientId, last_wa:c.wa, last_call:c.call, last_meeting:c.meeting, follow_up_date:c.followUp, has_deal:c.deal, proxy_contact:updates.proxy_contact, dormant:c.dormant, vip:c.vip}));
   closeEditPanel('ps-edit-client');
   openC(c);
   if(curTab==='clients') rClients();
