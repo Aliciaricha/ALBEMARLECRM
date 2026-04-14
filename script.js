@@ -53,6 +53,7 @@ let openCampaignId = null;
 let addCamTab='clients';
 let CLIENT_ACTIVITIES=[];
 let currentActivityClientId=null;
+let CLIENT_DEAL_TASKS={}; // keyed by clientId → array of due/overdue deal tasks
 
 // ── HELPERS ───────────────────────────────────────────────────────
 const ini = n => n.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
@@ -1383,41 +1384,84 @@ function activityIcon(type){
 
 function renderClientFollowUps(c){
   const items=[];
-  // Scheduled meetings (not done)
-  const clientMtgs=MEETINGS.filter(m=>m.client_id===c.id).sort((a,b)=>new Date(a.due_date)-new Date(b.due_date));
   const todayM=new Date(); todayM.setHours(0,0,0,0);
-  clientMtgs.forEach(m=>{
-    const md=new Date(m.due_date); md.setHours(0,0,0,0);
-    const daysUntil=Math.floor((md-todayM)/86400000);
-    const label=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
-    const urg=daysUntil<0?'urgent':daysUntil<=1?'soon':'normal';
-    items.push({icon:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
-      label:m.title||'Personal Meeting', sub:label, urg, mtgId:m.id});
+  const PENCIL='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  const IC_MTG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+  const IC_CALL='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.6a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 3h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 10.91a16 16 0 0 0 5.61 5.61l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+  const IC_WA='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+  const IC_TASK='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
+  const IC_CAM='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+  const daysLabel=d=>d<0?`${Math.abs(d)}d overdue`:d===0?'Today':d===1?'Tomorrow':`In ${d} days`;
+  const urgOf=d=>d<0?'urgent':d<=1?'soon':'normal';
+
+  // ── 1. Scheduled meetings (always show regardless of distance) ──
+  const clientMtgs=MEETINGS.filter(m=>m.client_id===c.id).sort((a,b)=>new Date(a.due_date)-new Date(b.due_date));
+  const mtgDaysArr=clientMtgs.map(m=>{ const md=new Date(m.due_date); md.setHours(0,0,0,0); return Math.floor((md-todayM)/86400000); });
+  const nextMtgDays=mtgDaysArr.length?mtgDaysArr[0]:999;
+  const hasMtgWithin7=nextMtgDays<=7;
+  clientMtgs.forEach((m,i)=>{
+    const du=mtgDaysArr[i];
+    items.push({icon:IC_MTG, label:`Personal Meeting${m.title?' — '+m.title:''}`, sub:daysLabel(du), urg:urgOf(du), mtgId:m.id});
   });
-  // Cadence follow-ups (only if no meeting covering this client)
-  const hasMtg=clientMtgs.length>0;
-  if(!hasMtg){
+
+  // ── 2. Cadence (WhatsApp / Call) ──
+  // If meeting within 7 days: cadence suppressed entirely
+  // If meeting > 7 days (or none): show BOTH call and WA independently if overdue
+  if(!hasMtgWithin7){
     const rel=REL_CADENCES[c.relationship];
-    if(rel && c.relationship!=='Archive'){
+    if(rel&&c.relationship!=='Archive'){
       const cl=daysSince(c.call), wa=daysSince(c.wa);
-      const clDue=rel.cD&&cl>=rel.cD, waDue=rel.waD&&wa>=rel.waD;
-      if(clDue){
+      if(rel.cD&&cl>=rel.cD){
         const ov=cl-rel.cD;
-        items.push({icon:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.6a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 3h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 10.91a16 16 0 0 0 5.61 5.61l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
-          label:'Phone Call due', sub:cl===9999?'Never called':`${cl}d since last call`, urg:ov>14?'urgent':'soon'});
-      } else if(waDue){
+        items.push({icon:IC_CALL, label:'Phone Call due', sub:cl===9999?'Never called':`${cl}d since last call`, urg:ov>14?'urgent':'soon'});
+      }
+      if(rel.waD&&wa>=rel.waD){
         const ov=wa-rel.waD;
-        items.push({icon:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
-          label:'WhatsApp due', sub:wa===9999?'Never contacted':`${wa}d since last message`, urg:ov>7?'urgent':'soon'});
+        items.push({icon:IC_WA, label:'WhatsApp due', sub:wa===9999?'Never contacted':`${wa}d since last message`, urg:ov>7?'urgent':'soon'});
       }
     }
   }
+
+  // ── 3. Deal tasks (due/overdue, ≤30 days) ──
+  const dealTasks=CLIENT_DEAL_TASKS[c.id]||[];
+  const todayD=new Date(); todayD.setHours(0,0,0,0);
+  dealTasks.forEach(t=>{
+    if(!t.due_date){ items.push({icon:IC_TASK, label:t.title||'Deal task', sub:'No due date', urg:'normal'}); return; }
+    const td=new Date(t.due_date); td.setHours(0,0,0,0);
+    const du=Math.floor((td-todayD)/86400000);
+    if(du>30) return;
+    const deal=DEALS.find(d=>d.id===t.deal_id);
+    items.push({icon:IC_TASK, label:t.title||'Deal task', sub:`${deal?deal.pt+' · ':''}${daysLabel(du)}`, urg:urgOf(du)});
+  });
+
+  // ── 4. Active campaign tasks for this client (≤30 days, not personal meetings) ──
+  const cutoff30=new Date(todayM); cutoff30.setDate(cutoff30.getDate()+30);
+  CAMPAIGNS.forEach(cam=>{
+    if(cam.type==='Personal') return; // personal meetings handled above
+    if(cam.date!=='Ongoing'){
+      if(cam.date==='TBC') return;
+      try{
+        const cd=new Date(cam.date); cd.setHours(0,0,0,0);
+        const diff=Math.floor((cd-todayM)/86400000);
+        if(diff>30||diff<-3) return; // outside window
+      }catch(e){ return; }
+    }
+    // Birthday campaign: only show if client has dob
+    const isBday=/birthday/i.test(cam.name)||/birthday/i.test(cam.occ||'');
+    if(isBday&&!c.dob) return;
+    const inCam=getCampaignClients(cam).some(cl=>cl.id===c.id);
+    if(!inCam) return;
+    const cd2=cam.date==='Ongoing'?null:new Date(cam.date);
+    const du2=cd2?Math.floor((cd2-todayM)/86400000):0;
+    items.push({icon:IC_CAM, label:cam.name, sub:cam.date==='Ongoing'?'Ongoing campaign':daysLabel(du2), urg:cam.date==='Ongoing'?'normal':urgOf(du2)});
+  });
+
   if(!items.length) return '';
   const rows=items.map(item=>`
     <div class="fu-row fu-${item.urg}">
       <div class="fu-ic">${item.icon}</div>
       <div class="fu-body"><div class="fu-lbl">${item.label}</div><div class="fu-sub">${item.sub}</div></div>
-      ${item.mtgId?`<div class="atl-edit" onclick="openEditMeeting('${item.mtgId}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>`:''}
+      ${item.mtgId?`<div class="atl-edit" onclick="openEditMeeting('${item.mtgId}')">${PENCIL}</div>`:''}
     </div>`).join('');
   return `<div class="prof-sec prof-fu"><div class="sec-lbl">Outstanding Follow-Ups</div>${rows}</div>`;
 }
@@ -1610,10 +1654,31 @@ async function openC(c){
     </div>
     <div style="height:36px"></div>`;
   pushProf('ps-client');
-  // Load activities in background — panel is already open and animating
-  await loadClientActivities(c.id, c);
-  const tlInner=document.getElementById('atl-inner');
-  if(tlInner && currentActivityClientId===c.id) tlInner.innerHTML=renderActivityTimeline(c.id);
+  // Load activities + deal tasks in background
+  await Promise.all([
+    loadClientActivities(c.id, c),
+    loadClientDealTasks(c.id)
+  ]);
+  const profBody2=document.getElementById('ps-client-body');
+  if(profBody2&&profBody2.dataset.clientId===c.id){
+    const tlInner=document.getElementById('atl-inner');
+    if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
+    _refreshMeetingFollowUps(c.id);
+  }
+}
+
+async function loadClientDealTasks(clientId){
+  const clientDeals=DEALS.filter(d=>d.clientId===clientId);
+  if(!clientDeals.length){ CLIENT_DEAL_TASKS[clientId]=[]; return; }
+  const todayD=new Date(); todayD.setHours(0,0,0,0);
+  const cutoff=new Date(todayD); cutoff.setDate(cutoff.getDate()+30);
+  const dealIds=clientDeals.map(d=>d.id);
+  const {data}=await SB.from('deal_tasks').select('*').in('deal_id',dealIds).eq('done',false).order('due_date',{ascending:true});
+  CLIENT_DEAL_TASKS[clientId]=(data||[]).filter(t=>{
+    if(!t.due_date) return true; // no date = show
+    const d=new Date(t.due_date); d.setHours(0,0,0,0);
+    return d<=cutoff;
+  });
 }
 
 // ── LOG CALL / WA / MEETING ───────────────────────────────────────
