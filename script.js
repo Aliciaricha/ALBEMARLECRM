@@ -257,8 +257,9 @@ function mkTasks(){
   });
 
   // Clients with a scheduled meeting within 14 days — meeting supersedes call & WhatsApp
+  const todayMidnight=new Date(); todayMidnight.setHours(0,0,0,0);
   const mtgCoveredIds = new Set(
-    MEETINGS.filter(m=>Math.floor((new Date(m.due_date)-TODAY)/86400000)<=14 && Math.floor((new Date(m.due_date)-TODAY)/86400000)>=-1)
+    MEETINGS.filter(m=>{ const d=new Date(m.due_date); d.setHours(0,0,0,0); const diff=Math.floor((d-todayMidnight)/86400000); return diff>=-1&&diff<=14; })
             .map(m=>m.client_id)
   );
 
@@ -289,7 +290,8 @@ function mkTasks(){
   // Meeting pass: scheduled meetings within 14 days
   MEETINGS.forEach(m=>{
     const c=CLIENTS.find(x=>x.id===m.client_id);
-    const daysUntil=Math.floor((new Date(m.due_date)-TODAY)/86400000);
+    const d=new Date(m.due_date); d.setHours(0,0,0,0);
+    const daysUntil=Math.floor((d-todayMidnight)/86400000);
     if(daysUntil>14) return;
     const label=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
     t.push({id:'mtg-'+m.id, nm:c?c.name:'Meeting', act:'Meeting'+(c?' — '+c.name:'')+(m.title?' · '+m.title:''),
@@ -380,6 +382,10 @@ function rHome(){
           if(t.clientObj) openWaSheet(t.clientObj,cam);
           else openCampaign(cam);
         };
+      } else if(t.isMtg){
+        if(t.clientObj){
+          el.onclick=(e)=>{ if(e.target.closest('.chk')) return; openC(t.clientObj); };
+        }
       } else {
         const isCall=t.id.startsWith('cl-');
         const client=CLIENTS.find(c=>'wa-'+c.id===t.id||'cl-'+c.id===t.id);
@@ -1378,8 +1384,10 @@ function renderClientFollowUps(c){
   const items=[];
   // Scheduled meetings (not done)
   const clientMtgs=MEETINGS.filter(m=>m.client_id===c.id).sort((a,b)=>new Date(a.due_date)-new Date(b.due_date));
+  const todayM=new Date(); todayM.setHours(0,0,0,0);
   clientMtgs.forEach(m=>{
-    const daysUntil=Math.floor((new Date(m.due_date)-TODAY)/86400000);
+    const md=new Date(m.due_date); md.setHours(0,0,0,0);
+    const daysUntil=Math.floor((md-todayM)/86400000);
     const label=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
     const urg=daysUntil<0?'urgent':daysUntil<=1?'soon':'normal';
     items.push({icon:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
@@ -1677,7 +1685,24 @@ async function saveScheduleMeeting(){
   if(error){ console.error('client_meetings error:',error); showToast(error.message||error.code||'DB error'); return; }
   MEETINGS.push(data);
   closeModal('modal-schedule-meeting');
+  // Switch to network tab so meeting task is visible immediately
+  homeTab='network';
+  document.querySelectorAll('.home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab==='network'));
   rHome();
+  // If client profile is open, refresh the follow-ups section
+  if(currentActivityClientId===scheduleMeetingClientId){
+    const c=CLIENTS.find(x=>x.id===scheduleMeetingClientId);
+    if(c){
+      const profBody=document.getElementById('ps-client-body');
+      if(profBody){
+        const existing=profBody.querySelector('.prof-fu');
+        const fuHtml=renderClientFollowUps(c);
+        const atlSec=profBody.querySelector('#atl-inner')?.closest?.('.prof-sec');
+        if(existing) existing.outerHTML=fuHtml||'<span></span>';
+        else if(atlSec&&fuHtml) atlSec.insertAdjacentHTML('beforebegin',fuHtml);
+      }
+    }
+  }
   showToast('Meeting scheduled ✓');
 }
 
