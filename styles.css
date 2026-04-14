@@ -376,3 +376,16 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .cri-check.on svg { opacity: 1; }
 .cam-roster-item.done { opacity: 0.50; }
 .cam-done-divider { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3); padding: 14px 0 6px; }
+
+/* Client profile follow-ups */
+.prof-fu { padding-bottom: 4px !important; }
+.fu-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
+.fu-row:last-child { border-bottom: none; }
+.fu-ic { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.fu-urgent .fu-ic { background: rgba(220,60,60,0.10); color: #c0392b; }
+.fu-soon .fu-ic { background: rgba(138,109,62,0.10); color: var(--gold); }
+.fu-normal .fu-ic { background: rgba(0,0,0,0.05); color: var(--t2); }
+.fu-lbl { font-size: 13px; font-weight: 600; color: var(--t1); }
+.fu-urgent .fu-lbl { color: #c0392b; }
+.fu-soon .fu-lbl { color: var(--gold); }
+.fu-sub { font-size: 11px; color: var(--t3); margin-top: 1px; }

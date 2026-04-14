@@ -256,9 +256,16 @@ function mkTasks(){
     });
   });
 
-  // Cadence pass: clients NOT covered by any active campaign
+  // Clients with a scheduled meeting within 14 days — meeting supersedes call & WhatsApp
+  const mtgCoveredIds = new Set(
+    MEETINGS.filter(m=>Math.floor((new Date(m.due_date)-TODAY)/86400000)<=14 && Math.floor((new Date(m.due_date)-TODAY)/86400000)>=-1)
+            .map(m=>m.client_id)
+  );
+
+  // Cadence pass: clients NOT covered by any active campaign or upcoming meeting
   CLIENTS.forEach(c=>{
     if(camCoveredIds.has(c.id)) return;
+    if(mtgCoveredIds.has(c.id)) return; // meeting within 14d supersedes call/wa
     const rel=REL_CADENCES[c.relationship];
     if(!rel||c.relationship==='Archive'||!c.relationship) return;
     const wa=daysSince(c.wa), cl=daysSince(c.call);
@@ -269,7 +276,7 @@ function mkTasks(){
       t.push({id:'cl-'+c.id, nm:c.name, act:'Call '+c.name,
         why:cl===9999?'Never called · '+c.relationship+' relationship':`${cl}d since last call · due every ${rel.cD}d`,
         urg:ov>14?'urgent':ov>=0?'soon':'normal', pri:rel.p*10+1+(c.deal?0:5)});
-      return;
+      return; // call due — WhatsApp suppressed
     }
     if(waDue){
       const ov=wa-rel.waD;
@@ -279,16 +286,15 @@ function mkTasks(){
     }
   });
 
-  // Meeting pass: scheduled meetings within 7 days
-  const todayStr=TODAY.toISOString().split('T')[0];
+  // Meeting pass: scheduled meetings within 14 days
   MEETINGS.forEach(m=>{
     const c=CLIENTS.find(x=>x.id===m.client_id);
     const daysUntil=Math.floor((new Date(m.due_date)-TODAY)/86400000);
-    if(daysUntil>7) return;
+    if(daysUntil>14) return;
     const label=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
     t.push({id:'mtg-'+m.id, nm:c?c.name:'Meeting', act:'Meeting'+(c?' — '+c.name:'')+(m.title?' · '+m.title:''),
       why:label, urg:daysUntil<0?'urgent':daysUntil<=1?'soon':'normal',
-      pri:5, isMtg:true, clientObj:c||null, mtgId:m.id});
+      pri:3, isMtg:true, clientObj:c||null, mtgId:m.id});
   });
 
   return t.sort((a,b)=>({urgent:0,soon:1,normal:2}[a.urg]||2)-({urgent:0,soon:1,normal:2}[b.urg]||2)||a.pri-b.pri);
@@ -1368,6 +1374,44 @@ function activityIcon(type){
   return `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
 }
 
+function renderClientFollowUps(c){
+  const items=[];
+  // Scheduled meetings (not done)
+  const clientMtgs=MEETINGS.filter(m=>m.client_id===c.id).sort((a,b)=>new Date(a.due_date)-new Date(b.due_date));
+  clientMtgs.forEach(m=>{
+    const daysUntil=Math.floor((new Date(m.due_date)-TODAY)/86400000);
+    const label=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
+    const urg=daysUntil<0?'urgent':daysUntil<=1?'soon':'normal';
+    items.push({icon:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+      label:`Meeting${m.title?' · '+m.title:''}`, sub:label, urg});
+  });
+  // Cadence follow-ups (only if no meeting covering this client)
+  const hasMtg=clientMtgs.length>0;
+  if(!hasMtg){
+    const rel=REL_CADENCES[c.relationship];
+    if(rel && c.relationship!=='Archive'){
+      const cl=daysSince(c.call), wa=daysSince(c.wa);
+      const clDue=rel.cD&&cl>=rel.cD, waDue=rel.waD&&wa>=rel.waD;
+      if(clDue){
+        const ov=cl-rel.cD;
+        items.push({icon:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.6a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 3h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 10.91a16 16 0 0 0 5.61 5.61l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+          label:'Phone Call due', sub:cl===9999?'Never called':`${cl}d since last call`, urg:ov>14?'urgent':'soon'});
+      } else if(waDue){
+        const ov=wa-rel.waD;
+        items.push({icon:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+          label:'WhatsApp due', sub:wa===9999?'Never contacted':`${wa}d since last message`, urg:ov>7?'urgent':'soon'});
+      }
+    }
+  }
+  if(!items.length) return '';
+  const rows=items.map(item=>`
+    <div class="fu-row fu-${item.urg}">
+      <div class="fu-ic">${item.icon}</div>
+      <div class="fu-body"><div class="fu-lbl">${item.label}</div><div class="fu-sub">${item.sub}</div></div>
+    </div>`).join('');
+  return `<div class="prof-sec prof-fu"><div class="sec-lbl">Outstanding Follow-Ups</div>${rows}</div>`;
+}
+
 function activityLabel(type){
   if(type==='whatsapp') return 'WhatsApp';
   if(type==='call')     return 'Call';
@@ -1517,6 +1561,7 @@ async function openC(c){
     ${camHtml?`<div class="prof-sec"><div class="sec-lbl">Active Campaigns</div><div class="itags" style="margin-top:4px">${camHtml}</div></div>`:''}
     <div class="prof-sec"><div class="sec-lbl">Deals & Commission</div>${dHtml}</div>
     ${c.notes?`<div class="prof-sec"><div class="sec-lbl">Notes</div><div class="sec-notes">${c.notes}</div></div>`:''}
+    ${renderClientFollowUps(c)}
     <div class="prof-sec">
       <div class="sec-lbl">Activity Timeline</div>
       <div id="atl-inner"><div class="atl-loading">Loading history…</div></div>
