@@ -204,10 +204,11 @@ function getCampaignClients(cam){
   const excludedIds=new Set(cam.manualExcludedIds||[]);
   // Segment matches minus excluded
   let filtered=CLIENTS.filter(c=>segIds.includes(c.id)&&!excludedIds.has(c.id));
-  // Add manual clients (always included, even if they'd otherwise be excluded)
+  // Add manual clients (always included, unless birthday campaign and client has no DOB)
   if(cam.manualClientIds && cam.manualClientIds.length){
+    const isBirthdayCam=(cam.occ&&cam.occ.toLowerCase().includes('birthday'))||(cam.name&&cam.name.toLowerCase().includes('birthday'));
     const existing=new Set(filtered.map(c=>c.id));
-    CLIENTS.filter(c=>cam.manualClientIds.includes(c.id)&&!existing.has(c.id)).forEach(c=>filtered.push(c));
+    CLIENTS.filter(c=>cam.manualClientIds.includes(c.id)&&!existing.has(c.id)&&(!isBirthdayCam||!!c.dob)).forEach(c=>filtered.push(c));
   }
   return filtered;
 }
@@ -1457,13 +1458,18 @@ function renderClientFollowUps(c){
   });
 
   if(!items.length) return '';
+  const dotColor=urg=>urg==='urgent'?'var(--red)':urg==='soon'?'var(--gold)':'rgba(0,0,0,0.25)';
+  const lblColor=urg=>urg==='urgent'?'#c0392b':urg==='soon'?'var(--gold)':'var(--t1)';
   const rows=items.map(item=>`
-    <div class="fu-row fu-${item.urg}">
-      <div class="fu-ic">${item.icon}</div>
-      <div class="fu-body"><div class="fu-lbl">${item.label}</div><div class="fu-sub">${item.sub}</div></div>
-      ${item.mtgId?`<div class="atl-edit" onclick="openEditMeeting('${item.mtgId}')">${PENCIL}</div>`:''}
+    <div class="act" style="padding:10px 14px;gap:12px;cursor:default">
+      <div style="width:6px;height:6px;border-radius:50%;background:${dotColor(item.urg)};flex-shrink:0;margin-top:5px"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:${lblColor(item.urg)};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.label}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px">${item.sub}</div>
+      </div>
+      ${item.mtgId?`<div class="atl-edit" style="margin-top:0" onclick="event.stopPropagation();openEditMeeting('${item.mtgId}')">${PENCIL}</div>`:''}
     </div>`).join('');
-  return `<div class="prof-sec prof-fu"><div class="sec-lbl">Outstanding Follow-Ups</div>${rows}</div>`;
+  return `<div class="prof-sec prof-fu"><div class="sec-lbl">Outstanding Follow-Ups</div><div class="acts">${rows}</div></div>`;
 }
 
 function activityLabel(type){
