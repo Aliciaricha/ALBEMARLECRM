@@ -1629,7 +1629,7 @@ async function saveScheduleMeeting(){
   const date=document.getElementById('schedule-meeting-date').value;
   if(!date){ showToast('Please set a date'); return; }
   const {data,error}=await SB.from('client_meetings').insert({client_id:scheduleMeetingClientId,title:title||null,due_date:date,done:false}).select().single();
-  if(error){ console.error('client_meetings error:',error); showToast('Could not save — run SQL in Supabase'); return; }
+  if(error){ console.error('client_meetings error:',error); showToast(error.message||error.code||'DB error'); return; }
   MEETINGS.push(data);
   closeModal('modal-schedule-meeting');
   rHome();
