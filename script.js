@@ -506,9 +506,17 @@ async function saveRescheduleTask(){
   if(error){ showToast('Could not reschedule'); return; }
   const t=homeDealTasks?.find(x=>x.id===rescheduleTaskId);
   if(t) t.due_date=newDate;
+  // Keep CLIENT_DEAL_TASKS in sync so profile follow-ups show the updated date
+  Object.values(CLIENT_DEAL_TASKS).forEach(tasks=>{
+    const ct=tasks.find(x=>x.id===rescheduleTaskId);
+    if(ct) ct.due_date=newDate;
+  });
   closeModal('modal-reschedule-task');
   homeDealTasks=null; // force reload
   renderHomeDealTasks();
+  // Refresh follow-ups if a client profile is currently open
+  const profBody=document.getElementById('ps-client-body');
+  if(profBody?.dataset.clientId) _refreshMeetingFollowUps(profBody.dataset.clientId);
   showToast('Task rescheduled ✓');
 }
 
@@ -1386,12 +1394,6 @@ function activityIcon(type){
 function renderClientFollowUps(c){
   const items=[];
   const todayM=new Date(); todayM.setHours(0,0,0,0);
-  const PENCIL='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
-  const IC_MTG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
-  const IC_CALL='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.6a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 3h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 10.91a16 16 0 0 0 5.61 5.61l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
-  const IC_WA='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-  const IC_TASK='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
-  const IC_CAM='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
   const daysLabel=d=>d<0?`${Math.abs(d)}d overdue`:d===0?'Today':d===1?'Tomorrow':`In ${d} days`;
   const urgOf=d=>d<0?'urgent':d<=1?'soon':'normal';
 
@@ -1402,7 +1404,12 @@ function renderClientFollowUps(c){
   const hasMtgWithin7=nextMtgDays<=7;
   clientMtgs.forEach((m,i)=>{
     const du=mtgDaysArr[i];
-    items.push({icon:IC_MTG, label:`Personal Meeting${m.title?' — '+m.title:''}`, sub:daysLabel(du), urg:urgOf(du), mtgId:m.id});
+    items.push({
+      label:`Personal Meeting${m.title?' — '+m.title:''}`, sub:daysLabel(du),
+      urg:urgOf(du), sortKey:du,
+      clickFn:`openEditMeeting('${m.id}')`,
+      checkFn:`tickFollowUpMeeting('${c.id}','${m.id}',this.closest('.act'))`
+    });
   });
 
   // ── 2. Cadence (WhatsApp / Call) ──
@@ -1414,11 +1421,19 @@ function renderClientFollowUps(c){
       const cl=daysSince(c.call), wa=daysSince(c.wa);
       if(rel.cD&&cl>=rel.cD){
         const ov=cl-rel.cD;
-        items.push({icon:IC_CALL, label:'Phone Call due', sub:cl===9999?'Never called':`${cl}d since last call`, urg:ov>14?'urgent':'soon'});
+        items.push({
+          label:'Phone Call due', sub:cl===9999?'Never called':`${cl}d since last call`,
+          urg:ov>14?'urgent':'soon', sortKey:-ov,
+          clickFn:null, checkFn:null
+        });
       }
       if(rel.waD&&wa>=rel.waD){
         const ov=wa-rel.waD;
-        items.push({icon:IC_WA, label:'WhatsApp due', sub:wa===9999?'Never contacted':`${wa}d since last message`, urg:ov>7?'urgent':'soon'});
+        items.push({
+          label:'WhatsApp due', sub:wa===9999?'Never contacted':`${wa}d since last message`,
+          urg:ov>7?'urgent':'soon', sortKey:-ov,
+          clickFn:null, checkFn:null
+        });
       }
     }
   }
@@ -1427,16 +1442,28 @@ function renderClientFollowUps(c){
   const dealTasks=CLIENT_DEAL_TASKS[c.id]||[];
   const todayD=new Date(); todayD.setHours(0,0,0,0);
   dealTasks.forEach(t=>{
-    if(!t.due_date){ items.push({icon:IC_TASK, label:t.title||'Deal task', sub:'No due date', urg:'normal'}); return; }
+    const safeTitle=(t.title||'Deal task').replace(/'/g,"\\'");
+    if(!t.due_date){
+      items.push({
+        label:t.title||'Deal task', sub:'No due date', urg:'normal', sortKey:999,
+        clickFn:null,
+        checkFn:`tickFollowUpDealTask('${c.id}','${t.id}',this.closest('.act'))`
+      });
+      return;
+    }
     const td=new Date(t.due_date); td.setHours(0,0,0,0);
     const du=Math.floor((td-todayD)/86400000);
     if(du>30) return;
     const deal=DEALS.find(d=>d.id===t.deal_id);
-    items.push({icon:IC_TASK, label:t.title||'Deal task', sub:`${deal?deal.pt+' · ':''}${daysLabel(du)}`, urg:urgOf(du)});
+    items.push({
+      label:t.title||'Deal task', sub:`${deal?deal.pt+' · ':''}${daysLabel(du)}`,
+      urg:urgOf(du), sortKey:du,
+      clickFn:`openRescheduleTask('${t.id}','${safeTitle}','${t.due_date}')`,
+      checkFn:`tickFollowUpDealTask('${c.id}','${t.id}',this.closest('.act'))`
+    });
   });
 
   // ── 4. Active campaign tasks for this client (≤30 days, not personal meetings) ──
-  const cutoff30=new Date(todayM); cutoff30.setDate(cutoff30.getDate()+30);
   CAMPAIGNS.forEach(cam=>{
     if(cam.type==='Personal') return; // personal meetings handled above
     if(cam.date!=='Ongoing'){
@@ -1454,20 +1481,29 @@ function renderClientFollowUps(c){
     if(!inCam) return;
     const cd2=cam.date==='Ongoing'?null:new Date(cam.date);
     const du2=cd2?Math.floor((cd2-todayM)/86400000):0;
-    items.push({icon:IC_CAM, label:cam.name, sub:cam.date==='Ongoing'?'Ongoing campaign':daysLabel(du2), urg:cam.date==='Ongoing'?'normal':urgOf(du2)});
+    items.push({
+      label:cam.name, sub:cam.date==='Ongoing'?'Ongoing campaign':daysLabel(du2),
+      urg:cam.date==='Ongoing'?'normal':urgOf(du2),
+      sortKey:cam.date==='Ongoing'?999:du2,
+      clickFn:`openCampaign(CAMPAIGNS.find(x=>x.id==='${cam.id}'))`,
+      checkFn:null
+    });
   });
 
   if(!items.length) return '';
+  // Sort chronologically — soonest (smallest sortKey) first
+  items.sort((a,b)=>a.sortKey-b.sortKey);
   const dotColor=urg=>urg==='urgent'?'var(--red)':urg==='soon'?'var(--gold)':'rgba(0,0,0,0.25)';
   const lblColor=urg=>urg==='urgent'?'#c0392b':urg==='soon'?'var(--gold)':'var(--t1)';
+  const CHK='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
   const rows=items.map(item=>`
-    <div class="act" style="padding:10px 14px;gap:12px;cursor:default">
+    <div class="act" style="padding:10px 14px;gap:12px;cursor:${item.clickFn?'pointer':'default'}"${item.clickFn?` onclick="event.stopPropagation();${item.clickFn}"`:''}>
       <div style="width:6px;height:6px;border-radius:50%;background:${dotColor(item.urg)};flex-shrink:0;margin-top:5px"></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:${lblColor(item.urg)};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.label}</div>
         <div style="font-size:11px;color:var(--t3);margin-top:2px">${item.sub}</div>
       </div>
-      ${item.mtgId?`<div class="atl-edit" style="margin-top:0" onclick="event.stopPropagation();openEditMeeting('${item.mtgId}')">${PENCIL}</div>`:''}
+      ${item.checkFn?`<div class="chk" onclick="event.stopPropagation();${item.checkFn}">${CHK}</div>`:''}
     </div>`).join('');
   return `<div class="prof-sec prof-fu"><div class="sec-lbl">Outstanding Follow-Ups</div><div class="acts">${rows}</div></div>`;
 }
@@ -1817,6 +1853,30 @@ function _refreshMeetingFollowUps(clientId){
     const atlSec=profBody.querySelector('#atl-inner')?.closest('.prof-sec');
     if(atlSec) atlSec.insertAdjacentHTML('beforebegin',fuHtml);
   }
+}
+
+async function tickFollowUpDealTask(clientId, taskId, rowEl){
+  rowEl.style.transition='opacity 0.3s'; rowEl.style.opacity='0';
+  await SB.from('deal_tasks').update({done:true}).eq('id',taskId);
+  if(CLIENT_DEAL_TASKS[clientId]){
+    CLIENT_DEAL_TASKS[clientId]=CLIENT_DEAL_TASKS[clientId].filter(t=>t.id!==taskId);
+  }
+  rHome();
+  setTimeout(()=>{ rowEl.remove(); _refreshMeetingFollowUps(clientId); },310);
+}
+
+async function tickFollowUpMeeting(clientId, mtgId, rowEl){
+  rowEl.style.transition='opacity 0.3s'; rowEl.style.opacity='0';
+  await SB.from('client_meetings').update({done:true}).eq('id',mtgId);
+  MEETINGS=MEETINGS.filter(x=>x.id!==mtgId);
+  const now=new Date();
+  const {data:actData}=await SB.from('client_activities').insert({client_id:clientId,type:'meeting',occurred_at:now.toISOString()}).select().single();
+  if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
+  const tlInner=document.getElementById('atl-inner');
+  if(tlInner) tlInner.innerHTML=renderActivityTimeline(clientId);
+  rHome();
+  showToast('Meeting done ✓');
+  setTimeout(()=>{ rowEl.remove(); _refreshMeetingFollowUps(clientId); },310);
 }
 
 // ── PARTNERS ──────────────────────────────────────────────────────
