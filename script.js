@@ -294,8 +294,9 @@ function mkTasks(){
     const daysUntil=Math.floor((d-todayMidnight)/86400000);
     if(daysUntil>14) return;
     const label=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
-    t.push({id:'mtg-'+m.id, nm:c?c.name:'Meeting', act:'Meeting'+(c?' — '+c.name:'')+(m.title?' · '+m.title:''),
-      why:label, urg:daysUntil<0?'urgent':daysUntil<=1?'soon':'normal',
+    const clientName=c?c.name:'Unknown';
+    t.push({id:'mtg-'+m.id, nm:clientName, act:`Personal meeting with ${clientName}`,
+      why:m.title?`${m.title} · ${label}`:label, urg:daysUntil<0?'urgent':daysUntil<=1?'soon':'normal',
       pri:3, isMtg:true, clientObj:c||null, mtgId:m.id});
   });
 
