@@ -8,7 +8,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="stylesheet" href="styles.css?v=20260414c">
+<link rel="stylesheet" href="styles.css?v=20260414d">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -778,6 +778,23 @@
   </div>
 </div>
 
+<!-- EDIT MEETING -->
+<div class="modal-overlay" id="modal-edit-meeting" onclick="closeModalOut(event,'modal-edit-meeting')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Edit Meeting</div>
+    <div class="form-body">
+      <div class="form-field"><label>Meeting Title (optional)</label><input type="text" id="edit-meeting-title" placeholder="e.g. Lunch at Claridge's"></div>
+      <div class="form-field"><label>Due Date</label><input type="date" id="edit-meeting-date"></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveEditMeeting()">Save</button>
+      <button class="form-danger" onclick="deleteScheduledMeeting()">Delete Meeting</button>
+      <div class="form-cancel" onclick="closeModal('modal-edit-meeting')">Cancel</div>
+    </div>
+  </div>
+</div>
+
 <!-- SCHEDULE MEETING -->
 <div class="modal-overlay" id="modal-schedule-meeting" onclick="closeModalOut(event,'modal-schedule-meeting')">
   <div class="modal-sheet">
@@ -795,6 +812,6 @@
   </div>
 </div>
 
-<script src="script.js?v=20260414c" defer></script>
+<script src="script.js?v=20260414d" defer></script>
 </body>
 </html>

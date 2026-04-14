@@ -1391,7 +1391,7 @@ function renderClientFollowUps(c){
     const label=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
     const urg=daysUntil<0?'urgent':daysUntil<=1?'soon':'normal';
     items.push({icon:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
-      label:`Meeting${m.title?' · '+m.title:''}`, sub:label, urg});
+      label:`Meeting${m.title?' · '+m.title:''}`, sub:label, urg, mtgId:m.id});
   });
   // Cadence follow-ups (only if no meeting covering this client)
   const hasMtg=clientMtgs.length>0;
@@ -1416,6 +1416,7 @@ function renderClientFollowUps(c){
     <div class="fu-row fu-${item.urg}">
       <div class="fu-ic">${item.icon}</div>
       <div class="fu-body"><div class="fu-lbl">${item.label}</div><div class="fu-sub">${item.sub}</div></div>
+      ${item.mtgId?`<div class="atl-edit" onclick="openEditMeeting('${item.mtgId}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>`:''}
     </div>`).join('');
   return `<div class="prof-sec prof-fu"><div class="sec-lbl">Outstanding Follow-Ups</div>${rows}</div>`;
 }
@@ -1668,7 +1669,7 @@ async function toggleVip(clientId){
   showToast(c.vip?'VIP status added ✓':'VIP status removed');
 }
 
-let scheduleMeetingClientId=null;
+let scheduleMeetingClientId=null, editingMeetingId=null;
 function openScheduleMeeting(clientId, clientName){
   scheduleMeetingClientId=clientId;
   document.getElementById('schedule-meeting-client').textContent=clientName;
@@ -1690,20 +1691,54 @@ async function saveScheduleMeeting(){
   document.querySelectorAll('.home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab==='network'));
   rHome();
   // If client profile is open, refresh the follow-ups section
-  if(currentActivityClientId===scheduleMeetingClientId){
-    const c=CLIENTS.find(x=>x.id===scheduleMeetingClientId);
-    if(c){
-      const profBody=document.getElementById('ps-client-body');
-      if(profBody){
-        const existing=profBody.querySelector('.prof-fu');
-        const fuHtml=renderClientFollowUps(c);
-        const atlSec=profBody.querySelector('#atl-inner')?.closest?.('.prof-sec');
-        if(existing) existing.outerHTML=fuHtml||'<span></span>';
-        else if(atlSec&&fuHtml) atlSec.insertAdjacentHTML('beforebegin',fuHtml);
-      }
-    }
-  }
+  _refreshMeetingFollowUps(scheduleMeetingClientId);
   showToast('Meeting scheduled ✓');
+}
+
+function openEditMeeting(mtgId){
+  const m=MEETINGS.find(x=>x.id===mtgId);
+  if(!m) return;
+  editingMeetingId=mtgId;
+  document.getElementById('edit-meeting-title').value=m.title||'';
+  document.getElementById('edit-meeting-date').value=m.due_date||'';
+  openModal('modal-edit-meeting');
+}
+async function saveEditMeeting(){
+  if(!editingMeetingId) return;
+  const title=document.getElementById('edit-meeting-title').value.trim();
+  const date=document.getElementById('edit-meeting-date').value;
+  if(!date){ showToast('Please set a date'); return; }
+  const {error}=await SB.from('client_meetings').update({title:title||null,due_date:date}).eq('id',editingMeetingId);
+  if(error){ showToast('Could not save'); return; }
+  const m=MEETINGS.find(x=>x.id===editingMeetingId);
+  if(m){ m.title=title||null; m.due_date=date; }
+  closeModal('modal-edit-meeting');
+  _refreshMeetingFollowUps(m?.client_id);
+  rHome();
+  showToast('Meeting updated ✓');
+}
+async function deleteScheduledMeeting(){
+  if(!editingMeetingId) return;
+  const m=MEETINGS.find(x=>x.id===editingMeetingId);
+  const {error}=await SB.from('client_meetings').delete().eq('id',editingMeetingId);
+  if(error){ showToast('Could not delete'); return; }
+  MEETINGS=MEETINGS.filter(x=>x.id!==editingMeetingId);
+  closeModal('modal-edit-meeting');
+  _refreshMeetingFollowUps(m?.client_id);
+  rHome();
+  showToast('Meeting deleted');
+}
+function _refreshMeetingFollowUps(clientId){
+  if(!clientId||currentActivityClientId!==clientId) return;
+  const c=CLIENTS.find(x=>x.id===clientId);
+  if(!c) return;
+  const profBody=document.getElementById('ps-client-body');
+  if(!profBody) return;
+  const existing=profBody.querySelector('.prof-fu');
+  const fuHtml=renderClientFollowUps(c);
+  const atlSec=profBody.querySelector('#atl-inner')?.closest?.('.prof-sec');
+  if(existing) existing.outerHTML=fuHtml||'<span></span>';
+  else if(atlSec&&fuHtml) atlSec.insertAdjacentHTML('beforebegin',fuHtml);
 }
 
 // ── PARTNERS ──────────────────────────────────────────────────────
