@@ -1390,8 +1390,9 @@ function renderClientFollowUps(c){
     const daysUntil=Math.floor((md-todayM)/86400000);
     const label=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
     const urg=daysUntil<0?'urgent':daysUntil<=1?'soon':'normal';
+    const dueSub=m.title?`${m.title} · ${label}`:label;
     items.push({icon:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
-      label:`Meeting${m.title?' · '+m.title:''}`, sub:label, urg, mtgId:m.id});
+      label:`Personal meeting with ${c.name}`, sub:dueSub, urg, mtgId:m.id});
   });
   // Cadence follow-ups (only if no meeting covering this client)
   const hasMtg=clientMtgs.length>0;
@@ -1536,7 +1537,9 @@ async function openC(c){
   const camHtml=cCams.length?cCams.map(cam=>`<span class="pill p-cam" onclick="openCampaign(CAMPAIGNS.find(x=>x.id==='${cam.id}'))">${cam.name}</span>`).join(''):'';
   // NOTE: activities are loaded AFTER panel opens (see below) to avoid blocking
 
-  document.getElementById('ps-client-body').innerHTML=`
+  const psBody=document.getElementById('ps-client-body');
+  psBody.dataset.clientId=c.id;
+  psBody.innerHTML=`
     <div class="prof-back-row">
       <div class="prof-back" onclick="closeProf('ps-client')">
         <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 1L1 7l6 6"/></svg><span>Clients</span>
@@ -1729,16 +1732,20 @@ async function deleteScheduledMeeting(){
   showToast('Meeting deleted');
 }
 function _refreshMeetingFollowUps(clientId){
-  if(!clientId||currentActivityClientId!==clientId) return;
+  if(!clientId) return;
+  const profBody=document.getElementById('ps-client-body');
+  if(!profBody||profBody.dataset.clientId!==clientId) return;
   const c=CLIENTS.find(x=>x.id===clientId);
   if(!c) return;
-  const profBody=document.getElementById('ps-client-body');
-  if(!profBody) return;
-  const existing=profBody.querySelector('.prof-fu');
   const fuHtml=renderClientFollowUps(c);
-  const atlSec=profBody.querySelector('#atl-inner')?.closest?.('.prof-sec');
-  if(existing) existing.outerHTML=fuHtml||'<span></span>';
-  else if(atlSec&&fuHtml) atlSec.insertAdjacentHTML('beforebegin',fuHtml);
+  const existing=profBody.querySelector('.prof-fu');
+  if(existing){
+    if(fuHtml) existing.outerHTML=fuHtml;
+    else existing.remove();
+  } else if(fuHtml){
+    const atlSec=profBody.querySelector('#atl-inner')?.closest('.prof-sec');
+    if(atlSec) atlSec.insertAdjacentHTML('beforebegin',fuHtml);
+  }
 }
 
 // ── PARTNERS ──────────────────────────────────────────────────────
