@@ -1714,7 +1714,8 @@ async function openC(c){
       ${c.relationship?`<div class="sec-row"><div class="sec-k">Relationship</div><div class="sec-v">${c.relationship}</div></div>`:''}
       <div class="sec-row"><div class="sec-k">Last WhatsApp</div><div class="sec-v ${waOv?'ov':wa!==9999?'ok':''}">${waStr}${waOv?' — Overdue':''}</div></div>
       <div class="sec-row"><div class="sec-k">Last Phone Call</div><div class="sec-v ${clOv?'ov':cl!==9999?'ok':''}">${clStr}${clOv?' — Overdue':''}</div></div>
-      ${c.followUp?`<div class="sec-row"><div class="sec-k">Follow-up date</div><div class="sec-v">${c.followUp}</div></div>`:''}
+      ${c.followUp?`<div class="sec-row"><div class="sec-k">Follow-up Date</div><div class="sec-v">${new Date(c.followUp+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div></div>
+      <div class="sec-row"><div class="sec-k">Follow-up Due</div><div class="sec-v">${(()=>{const today=new Date();today.setHours(0,0,0,0);const due=new Date(c.followUp+'T12:00:00');due.setHours(0,0,0,0);const d=Math.floor((due-today)/86400000);return d<0?`${Math.abs(d)} day${Math.abs(d)===1?'':'s'} overdue`:d===0?'Today':d===1?'Tomorrow':`In ${d} days`;})()}</div></div>`:''}
       ${c.dob?`<div class="sec-row"><div class="sec-k">Birthday</div><div class="sec-v">${new Date(c.dob+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long'})}</div></div>`:''}
     </div>
     ${c.int.length?`<div class="prof-sec"><div class="sec-lbl">Interests & Segments</div><div class="itags">${c.int.map(x=>`<span class="pill p-gh">${x}</span>`).join('')}</div></div>`:''}
