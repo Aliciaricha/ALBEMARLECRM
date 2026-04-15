@@ -421,7 +421,7 @@ function switchHomeTab(tab){
   if(tab===homeTab) return;
   doneDealTasksToday=0;
   homeTab=tab; homeDealTasks=null;
-  document.querySelectorAll('.home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
+  document.querySelectorAll('#s-home .home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   rHome();
 }
 
@@ -651,6 +651,8 @@ async function tick(id, el, e){
 
 // ── DEALS ─────────────────────────────────────────────────────────
 function rDeals(){
+  // Restore toggle state (switchHomeTab scoped to #s-home may have cleared these)
+  document.querySelectorAll('#s-deals .home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===dealTab));
   const tc=DEALS.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
   document.getElementById('d-tp').textContent=fm(tc);
   document.getElementById('d-tc').textContent=DEALS.length;
@@ -803,8 +805,13 @@ function rCampaigns(){
     g.cams.push(cam);
   });
 
-  // Sort each group soonest first; Ongoing/TBC fall to the bottom
-  GROUPS.forEach(g=>g.cams.sort((a,b)=>camSortKey(a.date)-camSortKey(b.date)));
+  // Sort each group soonest first; Ongoing/TBC and birthday campaigns fall to the bottom
+  const isBdayCam=c=>/birthday/i.test(c.name)||/birthday/i.test(c.occ||'');
+  GROUPS.forEach(g=>g.cams.sort((a,b)=>{
+    const ak=isBdayCam(a)?99999999999*2:camSortKey(a.date);
+    const bk=isBdayCam(b)?99999999999*2:camSortKey(b.date);
+    return ak-bk;
+  }));
 
   let gi=0;
   GROUPS.forEach(group=>{
@@ -1544,8 +1551,8 @@ function renderClientFollowUps(c){
     const camTaskKey=`cam-${cam.id}-${c.id}`;
     items.push({
       label:cam.name, sub:cam.date==='Ongoing'?'Ongoing campaign':daysLabel(du2),
-      urg:cam.date==='Ongoing'?'normal':urgOf(du2),
-      sortKey:cam.date==='Ongoing'?999:du2,
+      urg:cam.date==='Ongoing'||isBday?'normal':urgOf(du2),
+      sortKey:isBday?9999:(cam.date==='Ongoing'?999:du2),
       done:doneTasks.has(camTaskKey),
       clickFn:`openCampaign(CAMPAIGNS.find(x=>x.id==='${cam.id}'))`,
       checkFn:`tickFollowUpCam('${cam.id}','${c.id}',this.closest('.act'))`
