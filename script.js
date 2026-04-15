@@ -754,9 +754,23 @@ async function tickDealTaskTimeline(id,card){
 function rCampaigns(){
   const list=document.getElementById('cam-list'); list.innerHTML='';
 
+  // Compute virtual follow-up counts first so stats can include them
+  const _waDue=CLIENTS.filter(c=>{
+    const rel=REL_CADENCES[c.relationship];
+    if(!rel||c.relationship==='Archive'||!c.relationship) return false;
+    if(rel.cD&&daysSince(c.call)>=rel.cD) return false;
+    return rel.waD&&daysSince(c.wa)>=rel.waD;
+  });
+  const _callDue=CLIENTS.filter(c=>{
+    const rel=REL_CADENCES[c.relationship];
+    if(!rel||c.relationship==='Archive'||!c.relationship) return false;
+    return rel.cD&&daysSince(c.call)>=rel.cD;
+  });
+  const _mtgDue=MEETINGS.filter(m=>Math.floor((new Date(m.due_date)-TODAY)/86400000)<=7);
+
   // Stats
   const total=CAMPAIGNS.length;
-  const followUps=CAMPAIGNS.filter(c=>['Follow-Up','WhatsApp','Calling','Personal'].includes(c.type)).length;
+  const followUps=_waDue.length+_callDue.length+_mtgDue.length;
   const mandates=CAMPAIGNS.filter(c=>c.type==='Mandate').length;
   const luxury=CAMPAIGNS.filter(c=>['Event','Ongoing','Triggered','Seasonal'].includes(c.type)).length;
   const statsEl=document.getElementById('cam-stats');
@@ -774,6 +788,11 @@ function rCampaigns(){
     {key:'followups', label:'Follow-Ups',           cams:[]},
   ];
 
+  const camSortKey=d=>{
+    if(!d||d==='Ongoing'||d==='TBC') return 99999999999;
+    try{ return new Date(d).getTime(); }catch(e){ return 99999999999; }
+  };
+
   CAMPAIGNS.forEach(cam=>{
     let g;
     if(cam.type==='Follow-Up'||cam.type==='WhatsApp'||cam.type==='Calling'||cam.type==='Personal') g=GROUPS[3];
@@ -783,6 +802,9 @@ function rCampaigns(){
     else                                                  g=GROUPS[1];
     g.cams.push(cam);
   });
+
+  // Sort each group soonest first; Ongoing/TBC fall to the bottom
+  GROUPS.forEach(g=>g.cams.sort((a,b)=>camSortKey(a.date)-camSortKey(b.date)));
 
   let gi=0;
   GROUPS.forEach(group=>{
@@ -810,19 +832,7 @@ function rCampaigns(){
   });
 
   // ── Virtual Follow-Up cards (auto-generated from cadence + meetings) ──
-  const waDue=CLIENTS.filter(c=>{
-    const rel=REL_CADENCES[c.relationship];
-    if(!rel||c.relationship==='Archive'||!c.relationship) return false;
-    const wa=daysSince(c.wa), cl=daysSince(c.call);
-    if(rel.cD&&cl>=rel.cD) return false; // call supersedes wa
-    return rel.waD&&wa>=rel.waD;
-  });
-  const callDue=CLIENTS.filter(c=>{
-    const rel=REL_CADENCES[c.relationship];
-    if(!rel||c.relationship==='Archive'||!c.relationship) return false;
-    return rel.cD&&daysSince(c.call)>=rel.cD;
-  });
-  const mtgDue=MEETINGS.filter(m=>Math.floor((new Date(m.due_date)-TODAY)/86400000)<=7);
+  const waDue=_waDue, callDue=_callDue, mtgDue=_mtgDue;
 
   const virtualCams=[
     {label:'WhatsApp', type:'WhatsApp', color:'p-grn', count:waDue.length, desc:'Clients due a WhatsApp based on relationship cadence'},
