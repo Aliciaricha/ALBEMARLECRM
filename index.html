@@ -760,6 +760,22 @@
   </div>
 </div>
 
+<!-- SNOOZE CADENCE (WA / Call reschedule) -->
+<div class="modal-overlay" id="modal-snooze-cadence" onclick="closeModalOut(event,'modal-snooze-cadence')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Reschedule</div>
+    <div class="form-body">
+      <div class="form-field"><div id="snooze-cadence-name" style="font-size:14px;font-weight:600;color:var(--t1)"></div></div>
+      <div class="form-field"><label>Due date</label><input type="date" id="snooze-cadence-date"></div>
+    </div>
+    <div class="form-footer">
+      <button class="form-submit" onclick="saveSnoozeCadence()">Save</button>
+      <div class="form-cancel" onclick="closeModal('modal-snooze-cadence')">Cancel</div>
+    </div>
+  </div>
+</div>
+
 <!-- EDIT ACTIVITY -->
 <div class="modal-overlay" id="modal-edit-activity" onclick="closeModalOut(event,'modal-edit-activity')">
   <div class="modal-sheet">
