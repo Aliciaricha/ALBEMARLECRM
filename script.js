@@ -153,6 +153,13 @@ function normaliseCampaign(r){
   };
 }
 
+function fmtCamDate(date){
+  if(!date||date==='Ongoing') return 'Ongoing';
+  if(date==='TBC') return 'TBC';
+  try{ return new Date(date+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); }
+  catch(e){ return date; }
+}
+
 // ── SEGMENT & TASK LOGIC ──────────────────────────────────────────
 function campaignTiming(cam){
   if(!cam.date||cam.date==='Ongoing') return 'Ongoing';
@@ -794,7 +801,7 @@ function rCampaigns(){
       </div>
       <div class="camc-body">${cam.notes||''}</div>
       <div class="camc-foot">
-        ${cam.date?`<span class="pill p-gh">${cam.date}</span>`:''}
+        ${cam.date?`<span class="pill p-gh">${fmtCamDate(cam.date)}</span>`:''}
         ${cam.seg?`<span class="pill p-gold">${cam.seg}</span>`:''}
         <span class="pill p-grn">${cnt} contacts</span>
       </div>`;
@@ -1013,11 +1020,11 @@ function renderCampaignProfile(cam){
         <div class="prof-av sq" style="background:rgba(42,95,168,0.09);border-color:rgba(42,95,168,0.22);color:var(--blue)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>
         </div>
-        <div><div class="prof-name">${cam.name}</div><div class="prof-role-l">${cam.type} · ${cam.date}</div></div>
+        <div><div class="prof-name">${cam.name}</div><div class="prof-role-l">${cam.type} · ${fmtCamDate(cam.date)}</div></div>
       </div>
       <div class="prof-pills">
         <span class="pill ${CC[cam.type]||'p-gh'}">${cam.type}</span>
-        ${cam.seg?`<span class="pill p-gold">Segment: ${cam.seg}</span>`:''}
+        ${cam.seg?`<span class="pill p-gold">${cam.seg}</span>`:''}
         ${cam.occ?`<span class="pill p-amb">${cam.occ}</span>`:''}
         <span class="pill p-grn">${total} enrolled</span>
         ${doneCount?`<span class="pill p-gold">${doneCount} done</span>`:''}
@@ -1446,7 +1453,7 @@ function renderClientFollowUps(c){
   clientMtgs.forEach((m,i)=>{
     const du=mtgDaysArr[i];
     items.push({
-      label:`Personal Meeting${m.title?' — '+m.title:''}`, sub:daysLabel(du),
+      label:`Personal Meeting${m.title?' for '+m.title:''}`, sub:daysLabel(du),
       urg:urgOf(du), sortKey:du,
       clickFn:`openEditMeeting('${m.id}')`,
       checkFn:`tickFollowUpMeeting('${c.id}','${m.id}',this.closest('.act'))`
