@@ -395,16 +395,13 @@ function rHome(){
           else openCampaign(cam);
         };
       } else if(t.isMtg){
-        if(t.clientObj){
-          el.onclick=(e)=>{ if(e.target.closest('.chk')) return; openC(t.clientObj); };
-        }
+        el.onclick=(e)=>{ if(e.target.closest('.chk')) return; openEditMeeting(t.mtgId); };
       } else {
         const isCall=t.id.startsWith('cl-');
         const client=CLIENTS.find(c=>'wa-'+c.id===t.id||'cl-'+c.id===t.id);
         if(client){
           el.onclick=(e)=>{ if(e.target.closest('.chk')) return;
-            if(isCall) logCall(client);
-            else openWaSheet(client,null);
+            openSnoozeCadence(client.id, isCall?'call':'wa');
           };
         }
       }
@@ -530,6 +527,40 @@ async function saveRescheduleTask(){
 }
 
 
+
+let _snoozeCadence=null; // {clientId, type:'wa'|'call'}
+function openSnoozeCadence(clientId, type){
+  const c=CLIENTS.find(x=>x.id===clientId); if(!c) return;
+  _snoozeCadence={clientId,type};
+  document.getElementById('snooze-cadence-name').textContent=(type==='call'?'Call':'WhatsApp')+' · '+c.name;
+  // Pre-fill with tomorrow as a sensible default
+  const tomorrow=new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  document.getElementById('snooze-cadence-date').value=tomorrow.toISOString().split('T')[0];
+  openModal('modal-snooze-cadence');
+}
+async function saveSnoozeCadence(){
+  if(!_snoozeCadence) return;
+  const {clientId,type}=_snoozeCadence;
+  const chosenDate=document.getElementById('snooze-cadence-date').value;
+  if(!chosenDate){ showToast('Please pick a date'); return; }
+  const c=CLIENTS.find(x=>x.id===clientId); if(!c) return;
+  const rel=REL_CADENCES[c.relationship];
+  if(!rel){ showToast('No cadence found'); return; }
+  // Compute last-contact date that makes this task next due on chosenDate
+  const cadenceDays=type==='call'?rel.cD:rel.waD;
+  const dueMs=new Date(chosenDate).getTime();
+  const newLastMs=dueMs-(cadenceDays*86400000);
+  const newLastDate=new Date(newLastMs).toISOString().split('T')[0];
+  const field=type==='call'?'last_call':'last_wa';
+  const {error}=await SB.from('clients').update({[field]:newLastDate}).eq('id',clientId);
+  if(error){ showToast('Could not reschedule'); return; }
+  if(type==='call') c.call=newLastDate; else c.wa=newLastDate;
+  closeModal('modal-snooze-cadence');
+  _snoozeCadence=null;
+  rHome();
+  if(curTab==='clients') rClients();
+  showToast('Rescheduled ✓');
+}
 
 async function tickDealTask(id,el,e){
   e.stopPropagation();
@@ -764,7 +795,7 @@ function rCampaigns(){
       <div class="camc-body">${cam.notes||''}</div>
       <div class="camc-foot">
         ${cam.date?`<span class="pill p-gh">${cam.date}</span>`:''}
-        ${cam.seg?`<span class="pill p-gold">Seg: ${cam.seg}</span>`:''}
+        ${cam.seg?`<span class="pill p-gold">${cam.seg}</span>`:''}
         <span class="pill p-grn">${cnt} contacts</span>
       </div>`;
       list.appendChild(el);
