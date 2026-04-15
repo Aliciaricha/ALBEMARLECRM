@@ -183,11 +183,20 @@ function clientMatchesSeg(c, seg){
   return c.int && c.int.some(i=>i.toLowerCase().includes(seg.toLowerCase()));
 }
 
+function daysUntilBirthday(dob){
+  if(!dob) return null;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const [,m,d]=dob.split('-').map(Number);
+  let bday=new Date(today.getFullYear(),m-1,d); bday.setHours(0,0,0,0);
+  if(bday<today) bday=new Date(today.getFullYear()+1,m-1,d);
+  return Math.floor((bday-today)/86400000);
+}
+
 function getSegmentMatchedClients(cam){
   let filtered=CLIENTS;
   // Birthday campaigns: check name OR occasion field for 'birthday'
   const isBirthday=(cam.occ&&cam.occ.toLowerCase().includes('birthday'))||(cam.name&&cam.name.toLowerCase().includes('birthday'));
-  if(isBirthday){ filtered=filtered.filter(c=>!!c.dob); }
+  if(isBirthday){ filtered=filtered.filter(c=>!!c.dob&&daysUntilBirthday(c.dob)<=60); }
   else if(cam.occ && cam.occ!==''){
     const occs=cam.occ.split('/').map(o=>o.trim().toLowerCase());
     filtered=filtered.filter(c=>{
@@ -208,7 +217,7 @@ function getCampaignClients(cam){
   if(cam.manualClientIds && cam.manualClientIds.length){
     const isBirthdayCam=(cam.occ&&cam.occ.toLowerCase().includes('birthday'))||(cam.name&&cam.name.toLowerCase().includes('birthday'));
     const existing=new Set(filtered.map(c=>c.id));
-    CLIENTS.filter(c=>cam.manualClientIds.includes(c.id)&&!existing.has(c.id)&&(!isBirthdayCam||!!c.dob)).forEach(c=>filtered.push(c));
+    CLIENTS.filter(c=>cam.manualClientIds.includes(c.id)&&!existing.has(c.id)&&(!isBirthdayCam||(!!c.dob&&daysUntilBirthday(c.dob)<=60))).forEach(c=>filtered.push(c));
   }
   return filtered;
 }
@@ -806,7 +815,9 @@ function rCampaigns(){
   }
 }
 
+let _vcItems=[],_vcType='',_vcLabel='',_vcColor='';
 function openVirtualCampaign(type, label, colorClass, items){
+  _vcItems=[...items]; _vcType=type; _vcLabel=label; _vcColor=colorClass;
   renderVirtualCampaignProfile(type, label, colorClass, items);
   pushProf('ps-campaign');
 }
@@ -824,9 +835,12 @@ function renderVirtualCampaignProfile(type, label, colorClass, items){
     Personal:'Scheduled meetings within the next 7 days.',
   }[type]||'';
 
-  const rosterHtml=items.length?items.map(item=>{
-    if(type==='Personal'){
-      // item is a meeting record
+  let rosterHtml='';
+  let pendingCount=0;
+
+  if(type==='Personal'){
+    pendingCount=items.length;
+    rosterHtml=items.length?items.map(item=>{
       const client=CLIENTS.find(x=>x.id===item.client_id);
       const name=client?client.name:'Unknown';
       const daysUntil=Math.floor((new Date(item.due_date)-TODAY)/86400000);
@@ -838,20 +852,24 @@ function renderVirtualCampaignProfile(type, label, colorClass, items){
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
       </div>`;
-    } else {
-      // item is a client
-      const taskId=type==='Calling'?'cl-'+item.id:'wa-'+item.id;
-      const isDone=doneTasks.has(taskId);
-      return `<div class="cam-roster-item vcam-row a${isDone?' done':''}">
+    }).join('')
+    :'<div style="padding:16px;font-size:13px;color:var(--t3);font-style:italic">All done — nothing pending.</div>';
+  } else {
+    const taskPrefix=type==='Calling'?'cl-':'wa-';
+    const pending=items.filter(item=>!doneTasks.has(taskPrefix+item.id));
+    const done=items.filter(item=>doneTasks.has(taskPrefix+item.id));
+    pendingCount=pending.length;
+    const makeRow=(item,isDone)=>`<div class="cam-roster-item vcam-row a${isDone?' done':''}">
         <div class="cri-av">${ini(item.name)}</div>
         <div style="flex:1;min-width:0"><div class="cri-name">${item.name}</div><div class="cri-sub">${item.role||item.city||''}</div></div>
-        <div class="cri-check${isDone?' on':''}" onclick="tickVirtualClient('${item.id}','${type}','${label}','${colorClass}',this)">
+        <div class="cri-check${isDone?' on':''}"${isDone?'':` onclick="tickVirtualClient('${item.id}','${type}','${label}','${colorClass}',this)"`}>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
       </div>`;
-    }
-  }).join('')
-  :'<div style="padding:16px;font-size:13px;color:var(--t3);font-style:italic">All done — nothing pending.</div>';
+    rosterHtml=pending.map(item=>makeRow(item,false)).join('');
+    if(!pending.length) rosterHtml='<div style="padding:16px;font-size:13px;color:var(--t3);font-style:italic">All done — great work!</div>';
+    if(done.length) rosterHtml+=`<div class="cam-done-divider" style="padding-left:0">Completed · ${done.length}</div>${done.map(item=>makeRow(item,true)).join('')}`;
+  }
 
   document.getElementById('ps-campaign-body').innerHTML=`
     <div class="prof-back-row">
@@ -868,12 +886,12 @@ function renderVirtualCampaignProfile(type, label, colorClass, items){
       </div>
       <div class="prof-pills">
         <span class="pill ${colorClass}">${type}</span>
-        <span class="pill p-grn">${items.length} pending</span>
+        <span class="pill p-grn">${pendingCount} pending</span>
       </div>
     </div>
     <div class="prof-sec"><div class="sec-notes" style="font-size:12px">${desc}</div></div>
     <div class="prof-sec">
-      <div class="sec-lbl">Pending · ${items.length}</div>
+      <div class="sec-lbl">Pending · ${pendingCount}</div>
       ${rosterHtml}
     </div>
     <div style="height:36px"></div>`;
@@ -881,27 +899,19 @@ function renderVirtualCampaignProfile(type, label, colorClass, items){
 
 async function tickVirtualClient(clientId, type, label, colorClass, el){
   const c=CLIENTS.find(x=>x.id===clientId); if(!c) return;
+  const taskKey=(type==='Calling'?'cl-':'wa-')+clientId;
+  const today=new Date().toISOString().split('T')[0];
+  doneTasks.add(taskKey);
   el.classList.add('on');
   el.closest('.cam-roster-item').classList.add('done');
+  await SB.from('task_completions').upsert({task_key:taskKey,reset_date:today},{onConflict:'task_key'});
   if(type==='Calling'){
     await logCall(c);
   } else {
     await logWa(c);
   }
-  // Re-derive list and re-render
-  const waDue=CLIENTS.filter(cl=>{
-    const rel=REL_CADENCES[cl.relationship];
-    if(!rel||cl.relationship==='Archive'||!cl.relationship) return false;
-    if(rel.cD&&daysSince(cl.call)>=rel.cD) return false;
-    return rel.waD&&daysSince(cl.wa)>=rel.waD;
-  });
-  const callDue=CLIENTS.filter(cl=>{
-    const rel=REL_CADENCES[cl.relationship];
-    if(!rel||cl.relationship==='Archive'||!cl.relationship) return false;
-    return rel.cD&&daysSince(cl.call)>=rel.cD;
-  });
-  const newItems=type==='Calling'?callDue:waDue;
-  setTimeout(()=>renderVirtualCampaignProfile(type,label,colorClass,newItems),500);
+  // Re-render with full stored list so completed clients remain visible
+  setTimeout(()=>renderVirtualCampaignProfile(_vcType,_vcLabel,_vcColor,_vcItems),500);
 }
 
 async function tickVirtualMtg(mtgId, type, label, colorClass, el){
@@ -1424,7 +1434,8 @@ function renderClientFollowUps(c){
         items.push({
           label:'Phone Call due', sub:cl===9999?'Never called':`${cl}d since last call`,
           urg:ov>14?'urgent':'soon', sortKey:-ov,
-          clickFn:null, checkFn:null
+          done:doneTasks.has('cl-'+c.id),
+          clickFn:null, checkFn:`tickFollowUpCall('${c.id}',this.closest('.act'))`
         });
       }
       if(rel.waD&&wa>=rel.waD){
@@ -1432,7 +1443,8 @@ function renderClientFollowUps(c){
         items.push({
           label:'WhatsApp due', sub:wa===9999?'Never contacted':`${wa}d since last message`,
           urg:ov>7?'urgent':'soon', sortKey:-ov,
-          clickFn:null, checkFn:null
+          done:doneTasks.has('wa-'+c.id),
+          clickFn:null, checkFn:`tickFollowUpWa('${c.id}',this.closest('.act'))`
         });
       }
     }
@@ -1476,34 +1488,36 @@ function renderClientFollowUps(c){
     }
     // Birthday campaign: only show if client has dob
     const isBday=/birthday/i.test(cam.name)||/birthday/i.test(cam.occ||'');
-    if(isBday&&!c.dob) return;
+    if(isBday&&(!c.dob||daysUntilBirthday(c.dob)>60)) return;
     const inCam=getCampaignClients(cam).some(cl=>cl.id===c.id);
     if(!inCam) return;
     const cd2=cam.date==='Ongoing'?null:new Date(cam.date);
     const du2=cd2?Math.floor((cd2-todayM)/86400000):0;
+    const camTaskKey=`cam-${cam.id}-${c.id}`;
     items.push({
       label:cam.name, sub:cam.date==='Ongoing'?'Ongoing campaign':daysLabel(du2),
       urg:cam.date==='Ongoing'?'normal':urgOf(du2),
       sortKey:cam.date==='Ongoing'?999:du2,
+      done:doneTasks.has(camTaskKey),
       clickFn:`openCampaign(CAMPAIGNS.find(x=>x.id==='${cam.id}'))`,
-      checkFn:null
+      checkFn:`tickFollowUpCam('${cam.id}','${c.id}',this.closest('.act'))`
     });
   });
 
   if(!items.length) return '';
   // Sort chronologically — soonest (smallest sortKey) first
   items.sort((a,b)=>a.sortKey-b.sortKey);
-  const dotColor=urg=>urg==='urgent'?'var(--red)':urg==='soon'?'var(--gold)':'rgba(0,0,0,0.25)';
+  const dotOpacity=urg=>urg==='urgent'?'0.9':urg==='soon'?'0.6':'0.35';
   const lblColor=urg=>urg==='urgent'?'#c0392b':urg==='soon'?'var(--gold)':'var(--t1)';
   const CHK='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
   const rows=items.map(item=>`
     <div class="act" style="padding:10px 14px;gap:12px;cursor:${item.clickFn?'pointer':'default'}"${item.clickFn?` onclick="event.stopPropagation();${item.clickFn}"`:''}>
-      <div style="width:6px;height:6px;border-radius:50%;background:${dotColor(item.urg)};flex-shrink:0;margin-top:5px"></div>
+      <div style="width:6px;height:6px;border-radius:50%;background:var(--gold);opacity:${dotOpacity(item.urg)};flex-shrink:0;margin-top:2px"></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:${lblColor(item.urg)};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.label}</div>
         <div style="font-size:11px;color:var(--t3);margin-top:2px">${item.sub}</div>
       </div>
-      ${item.checkFn?`<div class="chk" onclick="event.stopPropagation();${item.checkFn}">${CHK}</div>`:''}
+      <div class="chk${item.done?' on':''}" onclick="event.stopPropagation();${item.checkFn||''}">${CHK}</div>
     </div>`).join('');
   return `<div class="prof-sec prof-fu"><div class="sec-lbl">Outstanding Follow-Ups</div><div class="acts">${rows}</div></div>`;
 }
@@ -1877,6 +1891,42 @@ async function tickFollowUpMeeting(clientId, mtgId, rowEl){
   rHome();
   showToast('Meeting done ✓');
   setTimeout(()=>{ rowEl.remove(); _refreshMeetingFollowUps(clientId); },310);
+}
+
+async function tickFollowUpWa(clientId, rowEl){
+  const c=CLIENTS.find(x=>x.id===clientId); if(!c) return;
+  const taskKey='wa-'+clientId;
+  const today=new Date().toISOString().split('T')[0];
+  doneTasks.add(taskKey);
+  rowEl.style.transition='opacity 0.3s'; rowEl.style.opacity='0';
+  await SB.from('task_completions').upsert({task_key:taskKey,reset_date:today},{onConflict:'task_key'});
+  await logWa(c);
+  setTimeout(()=>{ rowEl.remove(); _refreshMeetingFollowUps(clientId); },310);
+}
+
+async function tickFollowUpCall(clientId, rowEl){
+  const c=CLIENTS.find(x=>x.id===clientId); if(!c) return;
+  const taskKey='cl-'+clientId;
+  const today=new Date().toISOString().split('T')[0];
+  doneTasks.add(taskKey);
+  rowEl.style.transition='opacity 0.3s'; rowEl.style.opacity='0';
+  await SB.from('task_completions').upsert({task_key:taskKey,reset_date:today},{onConflict:'task_key'});
+  await logCall(c);
+  setTimeout(()=>{ rowEl.remove(); _refreshMeetingFollowUps(clientId); },310);
+}
+
+async function tickFollowUpCam(camId, clientId, rowEl){
+  const taskKey=`cam-${camId}-${clientId}`;
+  const today=new Date().toISOString().split('T')[0];
+  if(doneTasks.has(taskKey)){
+    doneTasks.delete(taskKey);
+    await SB.from('task_completions').delete().eq('task_key',taskKey);
+  } else {
+    doneTasks.add(taskKey);
+    await SB.from('task_completions').upsert({task_key:taskKey,reset_date:today},{onConflict:'task_key'});
+  }
+  rHome();
+  _refreshMeetingFollowUps(clientId);
 }
 
 // ── PARTNERS ──────────────────────────────────────────────────────
