@@ -1479,11 +1479,13 @@ function renderClientFollowUps(c){
 
   // ── 2. Cadence (WhatsApp / Call) ──
   // If meeting within 7 days: cadence suppressed entirely
-  // If meeting > 7 days (or none): show BOTH call and WA independently if overdue
+  // If meeting > 7 days (or none): show call or WA based on most recent contact
   if(!hasMtgWithin7){
     const rel=REL_CADENCES[c.relationship];
     if(rel&&c.relationship!=='Archive'){
       const cl=daysSince(c.call), wa=daysSince(c.wa);
+      // Most recent contact of any type — if within WA window, WA is not overdue
+      const lastAny=Math.min(cl,wa);
       if(rel.cD&&cl>=rel.cD){
         const ov=cl-rel.cD;
         items.push({
@@ -1493,10 +1495,12 @@ function renderClientFollowUps(c){
           clickFn:null, checkFn:`tickFollowUpCall('${c.id}',this.closest('.act'))`
         });
       }
-      if(rel.waD&&wa>=rel.waD){
-        const ov=wa-rel.waD;
+      // WA only due if the most recent contact of ANY type (call or WA) exceeds the WA window
+      if(rel.waD&&lastAny>=rel.waD&&!(rel.cD&&cl>=rel.cD)){
+        const ov=lastAny-rel.waD;
+        const waSub=lastAny===9999?'Never contacted':cl<=wa?`${cl}d since last call`:`${wa}d since last message`;
         items.push({
-          label:'WhatsApp due', sub:wa===9999?'Never contacted':`${wa}d since last message`,
+          label:'WhatsApp due', sub:waSub,
           urg:ov>7?'urgent':'soon', sortKey:-ov,
           done:doneTasks.has('wa-'+c.id),
           clickFn:null, checkFn:`tickFollowUpWa('${c.id}',this.closest('.act'))`
@@ -1696,9 +1700,48 @@ async function openC(c){
   currentActivityClientId=c.id;
   const rel=REL_CADENCES[c.relationship];
   const wa=daysSince(c.wa), cl=daysSince(c.call);
-  const waOv=rel?.waD&&wa>=rel.waD, clOv=rel?.cD&&cl>=rel.cD;
-  const waStr=wa===9999?'Never contacted':`${wa} days ago`;
-  const clStr=cl===9999?'Never called':`${cl} days ago`;
+
+  // ── Last Contact: most recent of WA or Call ──────────────────────
+  let lastContactType='', lastContactDays=9999;
+  if(wa!==9999||cl!==9999){
+    if(wa<=cl){ lastContactType='WhatsApp'; lastContactDays=wa; }
+    else       { lastContactType='Call';     lastContactDays=cl; }
+  }
+  const lastContactStr = lastContactDays===9999 ? 'Never contacted' :
+    lastContactDays===0 ? `${lastContactType} · Today` :
+    lastContactDays===1 ? `${lastContactType} · Yesterday` :
+    `${lastContactType} · ${lastContactDays} days ago`;
+
+  // ── Next Follow-Up: scheduled meeting takes priority, then cadence ─
+  let nextFollowUpStr='', nextFollowUpOv=false;
+  const _tdm=new Date(); _tdm.setHours(0,0,0,0);
+  const upcomingMtg=MEETINGS.filter(m=>m.client_id===c.id).sort((a,b)=>new Date(a.due_date)-new Date(b.due_date))[0];
+  if(upcomingMtg){
+    const dm=Math.floor((new Date(upcomingMtg.due_date).setHours(0,0,0,0)-_tdm.getTime())/86400000);
+    nextFollowUpStr=dm<0?`Meeting · ${Math.abs(dm)}d overdue`:dm===0?'Meeting · Today':dm===1?'Meeting · Tomorrow':`Meeting · In ${dm}d`;
+    nextFollowUpOv=dm<=0;
+  } else if(rel&&c.relationship&&c.relationship!=='Archive'){
+    if(lastContactType==='Call'&&cl<9999&&rel.cD){
+      // Call was most recent — next due is the next call
+      const d=rel.cD-cl;
+      nextFollowUpStr=d<0?`Call · ${Math.abs(d)}d overdue`:d===0?'Call · Due today':`Call · In ${d}d`;
+      nextFollowUpOv=d<=0;
+    } else if(lastContactType==='WhatsApp'&&wa<9999){
+      // WA was most recent — escalate to call if overdue
+      if(rel.cD&&cl<9999&&cl>=rel.cD){
+        const ov=cl-rel.cD;
+        nextFollowUpStr=ov===0?'Call · Due today':`Call · ${ov}d overdue`;
+        nextFollowUpOv=true;
+      } else if(rel.waD){
+        const d=rel.waD-wa;
+        nextFollowUpStr=d<0?`WhatsApp · ${Math.abs(d)}d overdue`:d===0?'WhatsApp · Due today':`WhatsApp · In ${d}d`;
+        nextFollowUpOv=d<=0;
+      }
+    } else if(rel.waD){
+      nextFollowUpStr='WhatsApp · Never contacted'; nextFollowUpOv=true;
+    }
+  }
+
   const cDeals=DEALS.filter(d=>d.clientId===c.id);
   const dHtml=cDeals.length?cDeals.map(d=>`<div class="deal-row">
     <div><div class="dr-l">${d.pt}</div><div class="dr-s">${d.cat} · ${d.s}</div></div>
@@ -1736,10 +1779,8 @@ async function openC(c){
     <div class="prof-sec">
       <div class="sec-lbl">Contact Status</div>
       ${c.relationship?`<div class="sec-row"><div class="sec-k">Relationship</div><div class="sec-v">${c.relationship}</div></div>`:''}
-      <div class="sec-row"><div class="sec-k">Last WhatsApp</div><div class="sec-v ${waOv?'ov':wa!==9999?'ok':''}">${waStr}${waOv?' — Overdue':''}</div></div>
-      <div class="sec-row"><div class="sec-k">Last Phone Call</div><div class="sec-v ${clOv?'ov':cl!==9999?'ok':''}">${clStr}${clOv?' — Overdue':''}</div></div>
-      ${c.followUp?`<div class="sec-row"><div class="sec-k">Follow-up Date</div><div class="sec-v">${new Date(c.followUp+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div></div>
-      <div class="sec-row"><div class="sec-k">Follow-up Due</div><div class="sec-v">${(()=>{const today=new Date();today.setHours(0,0,0,0);const due=new Date(c.followUp+'T12:00:00');due.setHours(0,0,0,0);const d=Math.floor((due-today)/86400000);return d<0?`${Math.abs(d)} day${Math.abs(d)===1?'':'s'} overdue`:d===0?'Today':d===1?'Tomorrow':`In ${d} days`;})()}</div></div>`:''}
+      <div class="sec-row"><div class="sec-k">Last Contact</div><div class="sec-v ${lastContactDays<9999?'ok':''}">${lastContactStr}</div></div>
+      ${nextFollowUpStr?`<div class="sec-row"><div class="sec-k">Next Follow-Up</div><div class="sec-v ${nextFollowUpOv?'ov':''}">${nextFollowUpStr}</div></div>`:''}
       ${c.dob?`<div class="sec-row"><div class="sec-k">Birthday</div><div class="sec-v">${new Date(c.dob+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long'})}</div></div>`:''}
     </div>
     ${c.int.length?`<div class="prof-sec"><div class="sec-lbl">Interests & Segments</div><div class="itags">${c.int.map(x=>`<span class="pill p-gh">${x}</span>`).join('')}</div></div>`:''}
