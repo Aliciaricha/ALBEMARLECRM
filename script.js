@@ -1642,12 +1642,29 @@ async function saveEditActivity(){
 
 async function deleteActivity(){
   if(!editActivityId) return;
+  const act=CLIENT_ACTIVITIES.find(a=>a.id===editActivityId);
   const {error}=await SB.from('client_activities').delete().eq('id',editActivityId);
   if(error){ showToast('Could not delete: '+error.message); return; }
   CLIENT_ACTIVITIES=CLIENT_ACTIVITIES.filter(a=>a.id!==editActivityId);
+  // Sync last_wa / last_call so the backfill code doesn't re-create this entry on next open
+  const c=CLIENTS.find(x=>x.id===editActivityClientId);
+  if(c && act && (act.type==='call'||act.type==='whatsapp')){
+    const remaining=CLIENT_ACTIVITIES.filter(a=>a.client_id===editActivityClientId&&a.type===act.type&&!a._synthetic);
+    const field=act.type==='call'?'last_call':'last_wa';
+    if(remaining.length){
+      const newDate=new Date(remaining[0].occurred_at).toISOString().split('T')[0];
+      await SB.from('clients').update({[field]:newDate}).eq('id',editActivityClientId);
+      if(act.type==='call') c.call=newDate; else c.wa=newDate;
+    } else {
+      await SB.from('clients').update({[field]:null}).eq('id',editActivityClientId);
+      if(act.type==='call') c.call=null; else c.wa=null;
+    }
+  }
   closeModal('modal-edit-activity');
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(editActivityClientId);
+  const profBody=document.getElementById('ps-client-body');
+  if(c&&profBody?.dataset.clientId===editActivityClientId) openC(c);
   rHome();
   showToast('Activity deleted');
 }
@@ -1799,6 +1816,8 @@ async function logCall(c){
   if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
+  const profBodyCall=document.getElementById('ps-client-body');
+  if(profBodyCall?.dataset.clientId===c.id) openC(c);
   rHome(); if(curTab==='clients') rClients(); showToast('Call logged ✓');
 }
 async function logWa(c){
@@ -1813,6 +1832,8 @@ async function logWa(c){
   if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
+  const profBody=document.getElementById('ps-client-body');
+  if(profBody?.dataset.clientId===c.id) openC(c);
   rHome(); if(curTab==='clients') rClients(); showToast('WhatsApp logged ✓');
 }
 async function logMeeting(c){
