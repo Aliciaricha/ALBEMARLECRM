@@ -1696,7 +1696,7 @@ async function saveLogMeeting(clientId){
   // replaced by logMeeting
 }
 
-async function openC(c){
+async function openC(c, _skipActivityLoad=false){
   currentActivityClientId=c.id;
   const rel=REL_CADENCES[c.relationship];
   const wa=daysSince(c.wa), cl=daysSince(c.call);
@@ -1824,7 +1824,9 @@ async function openC(c){
     </div>
     <div style="height:36px"></div>`;
   pushProf('ps-client');
+  if(_skipActivityLoad) return;
   // Load activities + deal tasks in background
+  const waSnap=c.wa, callSnap=c.call;
   await Promise.all([
     loadClientActivities(c.id, c),
     loadClientDealTasks(c.id)
@@ -1832,8 +1834,21 @@ async function openC(c){
   const profBody2=document.getElementById('ps-client-body');
   if(profBody2&&profBody2.dataset.clientId===c.id){
     const tlInner=document.getElementById('atl-inner');
-    if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
-    _refreshMeetingFollowUps(c.id);
+    if(c.wa!==waSnap||c.call!==callSnap){
+      // Reconciliation updated last_wa/last_call — re-render with correct values, no second load
+      const scrollTop=profBody2.scrollTop;
+      await openC(c, true);
+      const profBody3=document.getElementById('ps-client-body');
+      if(profBody3&&profBody3.dataset.clientId===c.id){
+        const tl=document.getElementById('atl-inner');
+        if(tl) tl.innerHTML=renderActivityTimeline(c.id);
+        _refreshMeetingFollowUps(c.id);
+        profBody3.scrollTop=scrollTop;
+      }
+    } else {
+      if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
+      _refreshMeetingFollowUps(c.id);
+    }
   }
 }
 
