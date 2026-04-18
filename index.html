@@ -542,38 +542,65 @@
     <div class="modal-handle"></div>
     <div class="modal-title" id="deal-modal-title">New Deal</div>
     <div class="form-body">
-      <div class="form-row">
-        <div class="form-field"><label>Client</label><select id="nd-client"></select></div>
-        <div class="form-field"><label>Partner</label><select id="nd-partner" onchange="updateDealCommDisplay()"></select></div>
-      </div>
-      <div class="form-row">
-        <div class="form-field"><label>Category</label>
-          <select id="nd-cat"><option>Real Estate</option><option>Jewellery</option><option>Private Aviation</option><option>Other</option></select>
+
+      <!-- VIEW MODE -->
+      <div id="nd-view-section" style="display:none">
+        <div style="margin-bottom:12px">
+          <div class="ndv-name" id="ndv-client"></div>
+          <div class="ndv-sub" id="ndv-sub"></div>
         </div>
-        <div class="form-field"><label>Status</label>
-          <select id="nd-status"><option>Waiting</option><option>Tentative</option><option>Negotiation</option><option>Confirmed</option></select>
+        <div style="margin-bottom:14px"><span class="pill" id="ndv-status-pill"></span></div>
+        <div class="ndv-field">
+          <div class="ndv-label">Deal Value</div>
+          <div class="ndv-value" id="ndv-value"></div>
+        </div>
+        <div class="ndv-field">
+          <div class="ndv-label">My Commission (USD)</div>
+          <div class="ndv-value" style="color:var(--gold);font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:300" id="ndv-comm"></div>
+        </div>
+        <div class="ndv-field" id="ndv-notes-row" style="display:none">
+          <div class="ndv-label">Notes</div>
+          <div class="ndv-value" id="ndv-notes"></div>
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-field">
-          <label>Deal Value</label>
-          <div style="display:flex;gap:6px">
-            <select id="nd-currency" style="width:74px;flex-shrink:0" onchange="updateDealCommDisplay()">
-              <option value="GBP">£ GBP</option>
-              <option value="USD">$ USD</option>
-              <option value="EUR">€ EUR</option>
-              <option value="AED">AED</option>
-            </select>
-            <input type="number" id="nd-value" placeholder="e.g. 5000000" oninput="updateDealCommDisplay()" style="flex:1;min-width:0">
+
+      <!-- EDIT MODE -->
+      <div id="nd-edit-section">
+        <div class="form-row">
+          <div class="form-field"><label>Client</label><select id="nd-client"></select></div>
+          <div class="form-field"><label>Partner</label><select id="nd-partner" onchange="updateDealCommDisplay()"></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>Category</label>
+            <select id="nd-cat"><option>Real Estate</option><option>Jewellery</option><option>Private Aviation</option><option>Other</option></select>
+          </div>
+          <div class="form-field"><label>Status</label>
+            <select id="nd-status"><option>Waiting</option><option>Tentative</option><option>Negotiation</option><option>Confirmed</option></select>
           </div>
         </div>
-        <div class="form-field"><label>My Commission</label><div id="nd-comm-display" style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--gold);font-weight:300;padding:6px 0">—</div></div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Deal Value</label>
+            <div style="display:flex;gap:6px">
+              <select id="nd-currency" style="width:74px;flex-shrink:0" onchange="updateDealCommDisplay()">
+                <option value="GBP">£ GBP</option>
+                <option value="USD">$ USD</option>
+                <option value="EUR">€ EUR</option>
+                <option value="AED">AED</option>
+              </select>
+              <input type="number" id="nd-value" placeholder="e.g. 5000000" oninput="updateDealCommDisplay()" style="flex:1;min-width:0">
+            </div>
+          </div>
+          <div class="form-field"><label>My Commission (USD)</label><div id="nd-comm-display" style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--gold);font-weight:300;padding:6px 0">—</div></div>
+        </div>
+        <div class="form-field"><label>Notes</label><input type="text" id="nd-notes" placeholder="e.g. Largest deal in pipeline"></div>
       </div>
-      <div class="form-field"><label>Notes</label><input type="text" id="nd-notes" placeholder="e.g. Largest deal in pipeline"></div>
+
+      <!-- TASKS (shared, shown for existing deals) -->
       <div id="nd-tasks-section" style="display:none">
         <div class="deal-task-hdr">
           <label>Tasks</label>
-          <div class="deal-task-addbtn" onclick="toggleDealTaskForm()">+ Add Task</div>
+          <div class="deal-task-addbtn" id="nd-task-add-btn" onclick="toggleDealTaskForm()">+ Add Task</div>
         </div>
         <div id="nd-task-list" class="deal-task-list"></div>
         <div id="nd-task-form" class="deal-task-form" style="display:none">
@@ -582,12 +609,21 @@
           <button class="deal-task-save" onclick="saveDealTask()">Add</button>
         </div>
       </div>
+
     </div>
-    <div class="form-footer">
+
+    <!-- VIEW FOOTER -->
+    <div class="form-footer" id="deal-footer-view" style="display:none">
+      <button class="form-submit" onclick="enterDealEditMode()">Edit Deal</button>
+      <div class="form-cancel" onclick="closeModal('modal-deal')">Close</div>
+    </div>
+    <!-- EDIT FOOTER -->
+    <div class="form-footer" id="deal-footer-edit">
       <button class="form-submit" id="deal-submit-btn" onclick="saveDeal()">Add Deal</button>
       <button class="form-danger" id="deal-delete-btn" onclick="deleteDeal()" style="display:none">Delete Deal</button>
-      <div class="form-cancel" onclick="closeModal('modal-deal')">Cancel</div>
+      <div class="form-cancel" onclick="cancelDealEdit()">Cancel</div>
     </div>
+
   </div>
 </div>
 

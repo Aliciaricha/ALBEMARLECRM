@@ -348,6 +348,12 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .pc-vip-star { display: flex; align-items: center; justify-content: center; width: 18px; flex-shrink: 0; }
 /* DND moon on client card */
 .pc-dnd-moon { display: flex; align-items: center; justify-content: center; width: 16px; flex-shrink: 0; }
+/* Deal view section */
+.ndv-name { font-size: 18px; font-weight: 600; color: var(--t1); margin-bottom: 3px; }
+.ndv-sub { font-size: 12px; color: var(--t3); }
+.ndv-field { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--bdr); }
+.ndv-label { font-size: 11px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.08em; }
+.ndv-value { font-size: 14px; color: var(--t1); font-weight: 500; text-align: right; }
 /* Filter sheet */
 .filter-section { display: flex; flex-direction: column; gap: 10px; }
 .filter-sec-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--t3); }

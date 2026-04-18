@@ -61,6 +61,24 @@ const daysSince = d => d ? Math.floor((TODAY - new Date(d))/86400000) : 9999;
 const fm = v => v>=1e6?'$'+(v/1e6).toFixed(1)+'m':v>=1e3?'$'+(v/1e3).toFixed(0)+'k':'$'+v.toLocaleString();
 const CURRENCY_SYM={GBP:'£',USD:'$',EUR:'€',AED:'AED '};
 function fmCur(v,cur){const s=CURRENCY_SYM[cur||'GBP']||((cur||'GBP')+' ');return v>=1e6?s+(v/1e6).toFixed(1)+'m':v>=1e3?s+(v/1e3).toFixed(0)+'k':s+v.toLocaleString();}
+function fmUSD(v){return fm(Math.round(v/10)*10);}
+
+// FX rates (base USD) — cached per day
+let FX_RATES=null, FX_FETCHED=null;
+async function getFxRates(){
+  const today=new Date().toISOString().split('T')[0];
+  if(FX_RATES&&FX_FETCHED===today) return FX_RATES;
+  try{
+    const r=await fetch('https://api.frankfurter.app/latest?base=USD');
+    const data=await r.json();
+    FX_RATES=data.rates; FX_FETCHED=today;
+  }catch(e){ FX_RATES=FX_RATES||{GBP:0.79,EUR:0.92,AED:3.67}; }
+  return FX_RATES;
+}
+function toUSD(v,cur){
+  if(!cur||cur==='USD') return v;
+  const rate=FX_RATES?.[cur]; return rate?v/rate:v;
+}
 const abbr = n => n.replace(/[()]/g,'').split(/[\s/&,]+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
 
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
@@ -655,26 +673,29 @@ async function tick(id, el, e){
 }
 
 // ── DEALS ─────────────────────────────────────────────────────────
-function rDeals(){
+async function rDeals(){
   // Restore toggle state (switchHomeTab scoped to #s-home may have cleared these)
   document.querySelectorAll('#s-deals .home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===dealTab));
-  const tc=DEALS.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
-  document.getElementById('d-tp').textContent=fm(tc);
+
+  await getFxRates();
+
+  // Totals always in USD
+  const tc=DEALS.reduce((s,d)=>s+toUSD(d.v*(d.pct/100),d.cur),0);
+  document.getElementById('d-tp').textContent=fmUSD(tc);
   document.getElementById('d-tc').textContent=DEALS.length;
 
-  // Stage summary bubbles
+  // Stage summary bubbles — USD
   const STAGE_IDS={Confirmed:'conf',Negotiation:'neg',Tentative:'tent',Waiting:'wait'};
   Object.entries(STAGE_IDS).forEach(([stage,key])=>{
     const sd=DEALS.filter(d=>d.s===stage);
-    const sv=sd.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
-    document.getElementById('d-sg-'+key+'-v').textContent=fm(sv);
+    const sv=sd.reduce((s,d)=>s+toUSD(d.v*(d.pct/100),d.cur),0);
+    document.getElementById('d-sg-'+key+'-v').textContent=fmUSD(sv);
     document.getElementById('d-sg-'+key+'-n').textContent=sd.length+(sd.length===1?' deal':' deals');
   });
 
   // Grouped deal list: Confirmed → Negotiation → Tentative → Waiting
   const list=document.getElementById('deal-list'); list.innerHTML='';
   const STAGE_ORDER=['Confirmed','Negotiation','Tentative','Waiting'];
-  const STAGE_PILL={'Confirmed':'p-grn','Negotiation':'p-amb','Tentative':'p-blu','Waiting':'p-gh'};
   let cardIdx=0;
   STAGE_ORDER.forEach(stage=>{
     const staged=DEALS.filter(d=>d.s===stage);
@@ -692,7 +713,7 @@ function rDeals(){
       el.onclick=()=>openDealModal(d.clientId,d.id);
       el.innerHTML=`<div class="dc-top">
         <div><div class="dc-cli">${cname}</div><div class="dc-par">${d.pt} · ${d.cat}</div></div>
-        <span class="pill ${STAGE_PILL[stage]||'p-gh'}" style="font-size:9px;flex-shrink:0">${d.s}</span>
+        <span class="pill ${STAGE_PILL_CLS[stage]||'p-gh'}" style="font-size:9px;flex-shrink:0">${d.s}</span>
       </div>
       <div class="dc-bot">
         <div><div class="dc-val">${fmCur(com,d.cur)}</div><div class="dc-spend">${fmCur(d.v,d.cur)} client spend</div></div>
@@ -2603,6 +2624,73 @@ function updateDealCommDisplay(){
 // ── DEAL MODAL ────────────────────────────────────────────────────
 let dealTasks=[];
 
+const STAGE_PILL_CLS={Confirmed:'p-grn',Negotiation:'p-amb',Tentative:'p-blu',Waiting:'p-gh'};
+
+function setDealModalMode(mode){
+  // mode: 'view' | 'edit' | 'new'
+  const isView=mode==='view';
+  document.getElementById('nd-view-section').style.display=isView?'':'none';
+  document.getElementById('nd-edit-section').style.display=isView?'none':'';
+  document.getElementById('deal-footer-view').style.display=isView?'':'none';
+  document.getElementById('deal-footer-edit').style.display=isView?'none':'';
+  const tasksSec=document.getElementById('nd-tasks-section');
+  const addBtn=document.getElementById('nd-task-add-btn');
+  const taskForm=document.getElementById('nd-task-form');
+  if(mode==='view'){
+    tasksSec.style.display='block';
+    if(addBtn) addBtn.style.display='none';
+    if(taskForm) taskForm.style.display='none';
+    document.getElementById('deal-modal-title').textContent='Deal';
+  } else if(mode==='edit'){
+    tasksSec.style.display='block';
+    if(addBtn) addBtn.style.display='';
+    document.getElementById('deal-submit-btn').textContent='Save Changes';
+    document.getElementById('deal-delete-btn').style.display='block';
+    document.getElementById('deal-modal-title').textContent='Edit Deal';
+  } else { // new
+    tasksSec.style.display='none';
+    document.getElementById('deal-submit-btn').textContent='Add Deal';
+    document.getElementById('deal-delete-btn').style.display='none';
+    document.getElementById('deal-modal-title').textContent='New Deal';
+  }
+}
+
+function enterDealEditMode(){
+  setDealModalMode('edit');
+}
+
+function cancelDealEdit(){
+  if(editingDealId){ setDealModalMode('view'); }
+  else { closeModal('modal-deal'); }
+}
+
+function _populateDealViewSection(d){
+  const client=CLIENTS.find(c=>c.id===d.clientId);
+  document.getElementById('ndv-client').textContent=client?client.name:'';
+  document.getElementById('ndv-sub').textContent=[d.pt,d.cat].filter(Boolean).join(' · ');
+  const pill=document.getElementById('ndv-status-pill');
+  pill.className='pill '+(STAGE_PILL_CLS[d.s]||'p-gh');
+  pill.textContent=d.s;
+  document.getElementById('ndv-value').textContent=fmCur(d.v,d.cur);
+  const com=d.v*(d.pct/100);
+  document.getElementById('ndv-comm').textContent=com?fm(com):'—';
+  const notesRow=document.getElementById('ndv-notes-row');
+  document.getElementById('ndv-notes').textContent=d.n||'';
+  notesRow.style.display=d.n?'':'none';
+}
+
+function _populateDealEditSection(d){
+  const cs=document.getElementById('nd-client');
+  const ps=document.getElementById('nd-partner');
+  cs.value=d.clientId;
+  ps.value=d.pt;
+  document.getElementById('nd-cat').value=d.cat;
+  document.getElementById('nd-status').value=d.s;
+  document.getElementById('nd-currency').value=d.cur||'GBP';
+  document.getElementById('nd-value').value=d.v;
+  document.getElementById('nd-notes').value=d.n;
+}
+
 function openDealModal(presetClientId, editDealId){
   editingDealId=editDealId||null;
   const cs=document.getElementById('nd-client');
@@ -2611,36 +2699,19 @@ function openDealModal(presetClientId, editDealId){
   const ps=document.getElementById('nd-partner');
   ps.innerHTML=PARTNERS.map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
 
-  const tasksSection=document.getElementById('nd-tasks-section');
-  const taskForm=document.getElementById('nd-task-form');
-
-  const delBtn=document.getElementById('deal-delete-btn');
   if(editDealId){
     const d=DEALS.find(x=>x.id===editDealId);
     if(d){
-      cs.value=d.clientId;
-      ps.value=d.pt;
-      document.getElementById('nd-cat').value=d.cat;
-      document.getElementById('nd-status').value=d.s;
-      document.getElementById('nd-currency').value=d.cur||'GBP';
-      document.getElementById('nd-value').value=d.v;
-      document.getElementById('nd-notes').value=d.n;
-      document.getElementById('deal-modal-title').textContent='Edit Deal';
-      document.getElementById('deal-submit-btn').textContent='Save Changes';
+      _populateDealViewSection(d);
+      _populateDealEditSection(d);
     }
-    tasksSection.style.display='block';
-    taskForm.style.display='none';
-    if(delBtn) delBtn.style.display='block';
+    setDealModalMode('view');
     loadDealTasks(editDealId);
   } else {
-    document.getElementById('deal-modal-title').textContent='New Deal';
-    document.getElementById('deal-submit-btn').textContent='Add Deal';
     ['nd-value','nd-notes'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('nd-currency').value='GBP';
-    tasksSection.style.display='none';
-    taskForm.style.display='none';
-    if(delBtn) delBtn.style.display='none';
+    document.getElementById('nd-currency').value='GBP';
     dealTasks=[];
+    setDealModalMode('new');
   }
   openModal('modal-deal');
   setTimeout(updateDealCommDisplay, 50);
