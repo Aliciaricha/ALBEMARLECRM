@@ -2597,7 +2597,7 @@ function updateDealCommDisplay(){
   if(!pct){ el.textContent='—'; el.title=''; return; }
   const p=PARTNERS.find(x=>x.name===partnerName);
   const label=`${p?.fee||''}${p?.bizFee?' × '+p.bizFee:''} = ${pct.toFixed(2)}%`;
-  el.textContent=v?`${fmCur(v*(pct/100),cur)} (${pct.toFixed(2)}%)`:label;
+  el.textContent=v?`${fm(v*(pct/100))} (${pct.toFixed(2)}%)`:label;
 }
 
 // ── DEAL MODAL ────────────────────────────────────────────────────
