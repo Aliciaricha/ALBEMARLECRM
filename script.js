@@ -1391,13 +1391,11 @@ function rClients(){
   const billionaires=CLIENTS.filter(c=>c.nw==='Billionaire').length;
   const centimillionaires=CLIENTS.filter(c=>c.nw==='Centimillionaire').length;
   const statsEl=document.getElementById('cli-stats');
-  const sf=clientFilters;
-  const activeTotal=!sf.nw&&!sf.tag&&!sf.relationship&&!sf.interest&&!sf._nat&&!sf._city;
   if(statsEl) statsEl.innerHTML=`
-    <div class="cli-stat${activeTotal?' cs-active':''}" onclick="filterByStat('total')" style="cursor:pointer"><div class="cli-stat-n">${total}</div><div class="cli-stat-l">Total</div></div>
-    <div class="cli-stat${sf.tag==='VIP'?' cs-active':''}" onclick="filterByStat('vip')" style="cursor:pointer"><div class="cli-stat-n g">${vips}</div><div class="cli-stat-l">VIPs</div></div>
-    <div class="cli-stat${sf.nw==='Billionaire'?' cs-active':''}" onclick="filterByStat('billionaire')" style="cursor:pointer"><div class="cli-stat-n">${billionaires}</div><div class="cli-stat-l">Billionaires</div></div>
-    <div class="cli-stat${sf.nw==='Centimillionaire'?' cs-active':''}" onclick="filterByStat('centimillionaire')" style="cursor:pointer"><div class="cli-stat-n">${centimillionaires}</div><div class="cli-stat-l">Centimilli.</div></div>
+    <div class="cli-stat" onclick="filterByStat('total')" style="cursor:pointer"><div class="cli-stat-n">${total}</div><div class="cli-stat-l">Total</div></div>
+    <div class="cli-stat" onclick="filterByStat('vip')" style="cursor:pointer"><div class="cli-stat-n g">${vips}</div><div class="cli-stat-l">VIPs</div></div>
+    <div class="cli-stat" onclick="filterByStat('billionaire')" style="cursor:pointer"><div class="cli-stat-n">${billionaires}</div><div class="cli-stat-l">Billionaires</div></div>
+    <div class="cli-stat" onclick="filterByStat('centimillionaire')" style="cursor:pointer"><div class="cli-stat-n">${centimillionaires}</div><div class="cli-stat-l">Centimilli.</div></div>
   `;
 
   // Active filter pills
@@ -1449,8 +1447,7 @@ function rClients(){
     const hasDeal=DEALS.some(d=>d.clientId===c.id);
     const cardTag=hasDeal?'<span class="pill p-gold pc-pill">Deal</span>':(c.int||[]).includes('High Potential')?'<span class="pill pc-pill" style="background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':'';
     const vipStar=c.vip?`<div class="pc-vip-star"><svg width="11" height="11" viewBox="0 0 24 24" fill="var(--gold)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>`:'';
-    const dndMoon=c.dnd?`<div class="pc-dnd-moon"><svg width="10" height="10" viewBox="0 0 24 24" fill="var(--p-ind,#6c7fc4)" stroke="none"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg></div>`:'';
-    div.innerHTML=`${vipStar}${dndMoon}<div class="pc-av">${ini(c.name)}</div>
+    div.innerHTML=`${vipStar}<div class="pc-av">${ini(c.name)}</div>
   <div class="pc-info">
     <div class="pc-name">${c.name}</div>
     <div class="pc-sub">${c.role||c.city||''}</div>
@@ -1918,7 +1915,7 @@ async function openC(c, _skipActivityLoad=false){
       ${nextFollowUpStr?`<div class="sec-row"><div class="sec-k">Next Follow-Up</div><div class="sec-v ${nextFollowUpOv?'ov':''}">${nextFollowUpStr}</div></div>`:''}
       ${c.dob?`<div class="sec-row"><div class="sec-k">Birthday</div><div class="sec-v">${new Date(c.dob+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long'})}</div></div>`:''}
     </div>
-    ${c.int.length?`<div class="prof-sec"><div class="sec-lbl">Interests & Segments</div><div class="itags">${c.int.map(x=>`<span class="pill p-gh">${x}</span>`).join('')}</div></div>`:''}
+    ${(()=>{const di=c.int.filter(x=>x!=='VIP'&&x!=='DND');return di.length?`<div class="prof-sec"><div class="sec-lbl">Interests & Segments</div><div class="itags">${di.map(x=>`<span class="pill p-gh">${x}</span>`).join('')}</div></div>`:''})()}
     ${camHtml?`<div class="prof-sec"><div class="sec-lbl">Active Campaigns</div><div class="itags" style="margin-top:4px">${camHtml}</div></div>`:''}
     <div class="prof-sec"><div class="sec-lbl">Deals & Commission</div>${dHtml}</div>
     ${c.notes?`<div class="prof-sec"><div class="sec-lbl">Notes</div><div class="sec-notes">${c.notes}</div></div>`:''}

@@ -297,8 +297,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 
 /* Client stats row */
 .cli-stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; padding: 0 16px 14px; }
-.cli-stat { text-align: center; padding: 10px 6px; border-radius: var(--r-md); background: rgba(255,255,255,0.52); backdrop-filter: blur(24px) saturate(1.8); -webkit-backdrop-filter: blur(24px) saturate(1.8); border: 0.5px solid rgba(255,255,255,0.80); box-shadow: var(--sh); transition: background 0.15s, border-color 0.15s; }
-.cli-stat.cs-active { background: rgba(138,109,62,0.10); border-color: var(--gold-border); }
+.cli-stat { text-align: center; padding: 10px 6px; border-radius: var(--r-md); background: rgba(255,255,255,0.52); backdrop-filter: blur(24px) saturate(1.8); -webkit-backdrop-filter: blur(24px) saturate(1.8); border: 0.5px solid rgba(255,255,255,0.80); box-shadow: var(--sh); }
 .cli-stat-n { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--t1); }
 .cli-stat-n.g { color: var(--gold); }
 .cli-stat-l { font-size: 8px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t3); margin-top: 2px; }
