@@ -68,11 +68,19 @@ let FX_RATES=null, FX_FETCHED=null;
 async function getFxRates(){
   const today=new Date().toISOString().split('T')[0];
   if(FX_RATES&&FX_FETCHED===today) return FX_RATES;
-  try{
-    const r=await fetch('https://api.frankfurter.app/latest?base=USD');
-    const data=await r.json();
-    FX_RATES=data.rates; FX_FETCHED=today;
-  }catch(e){ FX_RATES=FX_RATES||{GBP:0.79,EUR:0.92,AED:3.67}; }
+  const apis=[
+    'https://open.er-api.com/v6/latest/USD',
+    'https://api.frankfurter.app/latest?base=USD',
+  ];
+  for(const url of apis){
+    try{
+      const r=await fetch(url);
+      if(!r.ok) continue;
+      const data=await r.json();
+      if(data.rates?.EUR){ FX_RATES=data.rates; FX_FETCHED=today; return FX_RATES; }
+    }catch(e){ continue; }
+  }
+  if(!FX_RATES) FX_RATES={GBP:0.79,EUR:0.86,AED:3.67}; // last-resort fallback
   return FX_RATES;
 }
 function toUSD(v,cur){
