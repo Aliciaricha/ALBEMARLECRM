@@ -1383,11 +1383,13 @@ function rClients(){
   const billionaires=CLIENTS.filter(c=>c.nw==='Billionaire').length;
   const centimillionaires=CLIENTS.filter(c=>c.nw==='Centimillionaire').length;
   const statsEl=document.getElementById('cli-stats');
+  const sf=clientFilters;
+  const activeTotal=!sf.nw&&!sf.tag&&!sf.relationship&&!sf.interest&&!sf._nat&&!sf._city;
   if(statsEl) statsEl.innerHTML=`
-    <div class="cli-stat"><div class="cli-stat-n">${total}</div><div class="cli-stat-l">Total</div></div>
-    <div class="cli-stat"><div class="cli-stat-n g">${vips}</div><div class="cli-stat-l">VIPs</div></div>
-    <div class="cli-stat"><div class="cli-stat-n">${billionaires}</div><div class="cli-stat-l">Billionaires</div></div>
-    <div class="cli-stat"><div class="cli-stat-n">${centimillionaires}</div><div class="cli-stat-l">Centimilli.</div></div>
+    <div class="cli-stat${activeTotal?' cs-active':''}" onclick="filterByStat('total')" style="cursor:pointer"><div class="cli-stat-n">${total}</div><div class="cli-stat-l">Total</div></div>
+    <div class="cli-stat${sf.tag==='VIP'?' cs-active':''}" onclick="filterByStat('vip')" style="cursor:pointer"><div class="cli-stat-n g">${vips}</div><div class="cli-stat-l">VIPs</div></div>
+    <div class="cli-stat${sf.nw==='Billionaire'?' cs-active':''}" onclick="filterByStat('billionaire')" style="cursor:pointer"><div class="cli-stat-n">${billionaires}</div><div class="cli-stat-l">Billionaires</div></div>
+    <div class="cli-stat${sf.nw==='Centimillionaire'?' cs-active':''}" onclick="filterByStat('centimillionaire')" style="cursor:pointer"><div class="cli-stat-n">${centimillionaires}</div><div class="cli-stat-l">Centimilli.</div></div>
   `;
 
   // Active filter pills
@@ -1439,7 +1441,7 @@ function rClients(){
     const hasDeal=DEALS.some(d=>d.clientId===c.id);
     const cardTag=hasDeal?'<span class="pill p-gold pc-pill">Deal</span>':(c.int||[]).includes('High Potential')?'<span class="pill pc-pill" style="background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':'';
     const vipStar=c.vip?`<div class="pc-vip-star"><svg width="11" height="11" viewBox="0 0 24 24" fill="var(--gold)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>`:'';
-    const dndMoon=c.dnd?`<div class="pc-dnd-moon"><svg width="10" height="10" viewBox="0 0 24 24" fill="var(--p-ind,#6c7fc4)" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>`:'';
+    const dndMoon=c.dnd?`<div class="pc-dnd-moon"><svg width="10" height="10" viewBox="0 0 24 24" fill="var(--p-ind,#6c7fc4)" stroke="none"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg></div>`:'';
     div.innerHTML=`${vipStar}${dndMoon}<div class="pc-av">${ini(c.name)}</div>
   <div class="pc-info">
     <div class="pc-name">${c.name}</div>
@@ -1514,6 +1516,14 @@ function filterByNat(val){
 function filterByCity(val){
   clientFilters={relationship:null,nw:null,interest:null,tag:null,_city:val};
   if(curTab!=='clients') go('clients'); else rClients();
+}
+function filterByStat(key){
+  clientFilters={relationship:null,nw:null,interest:null,tag:null};
+  if(key==='vip') clientFilters.tag='VIP';
+  else if(key==='billionaire') clientFilters.nw='Billionaire';
+  else if(key==='centimillionaire') clientFilters.nw='Centimillionaire';
+  // 'total' clears all — already done above
+  rClients();
 }
 
 // ── ACTIVITY TIMELINE ─────────────────────────────────────────────
@@ -1931,7 +1941,7 @@ async function openC(c, _skipActivityLoad=false){
         <div><div class="act-t">Schedule Meeting</div><div class="act-s">Add to Personal follow-up campaign</div></div>
       </div>
       <div class="act" onclick="openDealModal('${c.id}',null)">
-        <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg></div>
         <div><div class="act-t">Add Deal</div><div class="act-s">Log a new deal for this client</div></div>
       </div>
       <div class="act" onclick="toggleVip('${c.id}')">
@@ -1939,7 +1949,7 @@ async function openC(c, _skipActivityLoad=false){
         <div><div class="act-t" style="${c.vip?'color:var(--gold)':''}">${c.vip?'Remove VIP':'Mark as VIP'}</div><div class="act-s">${c.vip?'Remove VIP status from this client':'Pin to top of client list with star'}</div></div>
       </div>
       <div class="act" onclick="toggleDnd('${c.id}')">
-        <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="${c.dnd?'var(--p-ind,#6c7fc4)':'none'}" stroke="${c.dnd?'var(--p-ind,#6c7fc4)':'var(--fg2)'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
+        <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="${c.dnd?'var(--p-ind,#6c7fc4)':'none'}" stroke="${c.dnd?'var(--p-ind,#6c7fc4)':'var(--fg2)'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg></div>
         <div><div class="act-t" style="${c.dnd?'color:var(--p-ind,#6c7fc4)':''}">${c.dnd?'Remove Do Not Disturb':'Do Not Disturb'}</div><div class="act-s">${c.dnd?'Resume WhatsApp updates for this client':'Pause all WhatsApp updates for this client'}</div></div>
       </div>
     </div>
