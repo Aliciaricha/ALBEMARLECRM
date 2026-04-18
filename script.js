@@ -716,7 +716,7 @@ async function rDeals(){
         <span class="pill ${STAGE_PILL_CLS[stage]||'p-gh'}" style="font-size:9px;flex-shrink:0">${d.s}</span>
       </div>
       <div class="dc-bot">
-        <div><div class="dc-val">${fmCur(com,d.cur)}</div><div class="dc-spend">${fmCur(d.v,d.cur)} client spend</div></div>
+        <div><div class="dc-val">${fmUSD(toUSD(com,d.cur))}</div><div class="dc-spend">${fmUSD(toUSD(d.v,d.cur))} client spend</div></div>
       </div>`;
       list.appendChild(el);
     });
