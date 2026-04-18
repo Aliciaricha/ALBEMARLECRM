@@ -698,7 +698,7 @@ async function rDeals(){
   const STAGE_ORDER=['Confirmed','Negotiation','Tentative','Waiting'];
   let cardIdx=0;
   STAGE_ORDER.forEach(stage=>{
-    const staged=DEALS.filter(d=>d.s===stage);
+    const staged=DEALS.filter(d=>d.s===stage).sort((a,b)=>(b.v*b.pct/100)-(a.v*a.pct/100));
     if(!staged.length) return;
     const hdr=document.createElement('div');
     hdr.className='rec-cat-header';
@@ -1040,27 +1040,11 @@ function renderCampaignProfile(cam){
   const total=allContacts.length;
   const doneCount=allContacts.filter(c=>camCompletions.has(c.type+':'+c.id)).length;
 
-  // Sort: pending first, done last
   allContacts.sort((a,b)=>{
     const aD=camCompletions.has(a.type+':'+a.id);
     const bD=camCompletions.has(b.type+':'+b.id);
     return aD===bD?0:aD?1:-1;
   });
-
-  const rosterHtml=allContacts.length?allContacts.map((c,i)=>{
-    const done=camCompletions.has(c.type+':'+c.id);
-    // Add a "Done" divider before first completed item
-    const prefix=(done&&(i===0||!camCompletions.has(allContacts[i-1]?.type+':'+allContacts[i-1]?.id)))
-      ?`<div class="cam-done-divider">Completed · ${doneCount}</div>`:'';
-    return `${prefix}<div class="cam-roster-item${done?' done':''} a">
-      <div class="cri-av" style="${c.avStyle}">${c.av}</div>
-      <div style="flex:1;min-width:0"><div class="cri-name">${c.name}</div><div class="cri-sub">${c.sub}</div></div>
-      <div class="cri-check${done?' on':''}" onclick="toggleCamCompletion('${cam.id}','${c.type}','${c.id}')">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-      </div>
-    </div>`;
-  }).join('')
-  :'<div style="padding:16px;font-size:13px;color:var(--t3);font-style:italic">No contacts enrolled yet.</div>';
 
   document.getElementById('ps-campaign-body').innerHTML=`
     <div class="prof-back-row">
@@ -1090,9 +1074,105 @@ function renderCampaignProfile(cam){
         <span>Contacts · ${total}</span>
         <span style="font-size:11px;color:var(--gold);font-weight:600;cursor:pointer" onclick="openAddCamClient('${cam.id}')">+ Add</span>
       </div>
-      ${rosterHtml}
+      <div id="cam-roster-list"></div>
     </div>
     <div style="height:36px"></div>`;
+
+  const rosterEl=document.getElementById('cam-roster-list');
+  if(!allContacts.length){
+    rosterEl.innerHTML='<div style="padding:16px;font-size:13px;color:var(--t3);font-style:italic">No contacts enrolled yet.</div>';
+    return;
+  }
+
+  allContacts.forEach((c,i)=>{
+    const done=camCompletions.has(c.type+':'+c.id);
+
+    if(done&&(i===0||!camCompletions.has(allContacts[i-1]?.type+':'+allContacts[i-1]?.id))){
+      const divider=document.createElement('div');
+      divider.className='cam-done-divider';
+      divider.textContent=`Completed · ${doneCount}`;
+      rosterEl.appendChild(divider);
+    }
+
+    const row=document.createElement('div');
+    row.className='cam-roster-item'+(done?' done':'')+' a';
+    row.style.cssText='position:relative;overflow:hidden;padding:0';
+
+    // Red remove panel revealed on swipe
+    const removeBtn=document.createElement('div');
+    removeBtn.className='cri-remove-action';
+    removeBtn.innerHTML=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg><span>Remove</span>`;
+    removeBtn.onclick=(e)=>{ e.stopPropagation(); removeCamContact(cam,c); };
+    row.appendChild(removeBtn);
+
+    // Sliding inner content
+    const inner=document.createElement('div');
+    inner.className='cri-inner';
+    inner.innerHTML=`<div class="cri-av" style="${c.avStyle}">${c.av}</div>
+      <div style="flex:1;min-width:0"><div class="cri-name">${c.name}</div><div class="cri-sub">${c.sub}</div></div>
+      <div class="cri-check${done?' on':''}">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>`;
+    inner.querySelector('.cri-check').onclick=(e)=>{ e.stopPropagation(); toggleCamCompletion(cam.id,c.type,c.id); };
+    row.appendChild(inner);
+
+    addCamSwipe(row,inner);
+    rosterEl.appendChild(row);
+  });
+}
+
+let _openSwipeInner=null;
+function _closeCamSwipe(){
+  if(_openSwipeInner){
+    _openSwipeInner.style.transition='transform 0.22s ease';
+    _openSwipeInner.style.transform='translateX(0)';
+    _openSwipeInner=null;
+  }
+}
+
+function addCamSwipe(rowEl,innerEl){
+  const SNAP=80, THRESH=44;
+  let startX=0,startY=0,dx=0,swiped=false,scrolling=null;
+
+  rowEl.addEventListener('touchstart',e=>{
+    _closeCamSwipe();
+    startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+    dx=0; scrolling=null;
+    innerEl.style.transition='none';
+  },{passive:true});
+
+  rowEl.addEventListener('touchmove',e=>{
+    const mx=e.touches[0].clientX-startX, my=e.touches[0].clientY-startY;
+    if(scrolling===null) scrolling=Math.abs(my)>Math.abs(mx);
+    if(scrolling) return;
+    dx=mx;
+    const base=swiped?-SNAP:0;
+    innerEl.style.transform=`translateX(${Math.max(-SNAP,Math.min(0,base+dx))}px)`;
+  },{passive:true});
+
+  rowEl.addEventListener('touchend',()=>{
+    if(scrolling) return;
+    innerEl.style.transition='transform 0.22s ease';
+    const base=swiped?-SNAP:0, final=base+dx;
+    if(!swiped&&final<-THRESH){ innerEl.style.transform=`translateX(-${SNAP}px)`; swiped=true; _openSwipeInner=innerEl; }
+    else if(swiped&&final>-THRESH){ innerEl.style.transform='translateX(0)'; swiped=false; _openSwipeInner=null; }
+    else if(swiped){ innerEl.style.transform=`translateX(-${SNAP}px)`; _openSwipeInner=innerEl; }
+    else{ innerEl.style.transform='translateX(0)'; }
+  });
+}
+
+async function removeCamContact(cam,contact){
+  if(contact.type==='client'){
+    await toggleCamContact('client',contact.id,cam.id);
+  } else if(contact.type==='partner'){
+    const ids=(cam.manualPartnerIds||[]).filter(id=>id!==contact.id);
+    const{error}=await SB.from('campaigns').update({manual_partner_ids:ids}).eq('id',cam.id);
+    if(!error){ cam.manualPartnerIds=ids; renderCampaignProfile(cam); showToast('Removed'); }
+  } else if(contact.type==='rec'){
+    const ids=(cam.manualRecIds||[]).filter(id=>id!==contact.id);
+    const{error}=await SB.from('campaigns').update({manual_rec_ids:ids}).eq('id',cam.id);
+    if(!error){ cam.manualRecIds=ids; renderCampaignProfile(cam); showToast('Removed'); }
+  }
 }
 
 async function toggleCamCompletion(camId, ctype, cid){

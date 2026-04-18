@@ -383,6 +383,9 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .cri-check svg { opacity: 0; stroke: white; transition: opacity 0.15s; }
 .cri-check.on svg { opacity: 1; }
 .cam-roster-item.done { opacity: 0.50; }
+/* Swipe-to-remove */
+.cri-inner { display: flex; align-items: center; gap: 12px; padding: 9px 0; width: 100%; background: #f4f9ff; position: relative; z-index: 1; }
+.cri-remove-action { position: absolute; right: 0; top: 0; height: 100%; width: 80px; background: var(--red); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: white; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; cursor: pointer; z-index: 0; }
 .cam-done-divider { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--t3); padding: 14px 0 6px; }
 
 /* Client profile follow-ups */
