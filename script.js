@@ -1885,7 +1885,6 @@ async function openC(c, _skipActivityLoad=false){
         <div><div class="prof-name">${c.name}</div><div class="prof-role-l">${c.role||''}${c.role&&c.city?' · ':''}<span${c.city?` style="cursor:pointer;color:var(--gold)" onclick="filterByCity('${c.city.replace(/'/g,"\\'")}');closeProf('ps-client')"`:''} >${c.city}</span></div></div>
       </div>
       <div class="prof-pills">
-        <span class="pill" style="background:${TC[c.tier]||'#888'}15;color:${TC[c.tier]||'#888'};border-color:${TC[c.tier]||'#888'}40">${c.tier}</span>
         <span class="pill p-gh">${c.nw}</span>
         ${c.nat?`<span class="pill p-gh" style="cursor:pointer" onclick="filterByNat('${c.nat.replace(/'/g,"\\'")}');closeProf('ps-client')">${c.nat}</span>`:''}
         ${c.deal?'<span class="pill p-gold">Active Deal</span>':''}
@@ -2447,7 +2446,7 @@ async function saveClient(){
   const row={
     name, position:document.getElementById('nc-role').value.trim(),
     city:document.getElementById('nc-city').value.trim(),
-    tier:document.getElementById('nc-tier').value,
+    tier:'Active',
     net_worth:document.getElementById('nc-nw').value,
     nationality:document.getElementById('nc-nat').value.trim(),
     religion:document.getElementById('nc-rel').value,
@@ -2506,7 +2505,7 @@ async function saveEditClient(){
     name:document.getElementById('ec-name').value.trim()||c.name,
     position:document.getElementById('ec-role').value.trim(),
     city:document.getElementById('ec-city').value.trim(),
-    tier:document.getElementById('ec-tier').value,
+    tier:c.tier||'Active',
     net_worth:document.getElementById('ec-nw').value,
     nationality:document.getElementById('ec-nat').value.trim(),
     religion:document.getElementById('ec-rel').value,
@@ -2753,7 +2752,7 @@ function _populateDealViewSection(d){
   pill.textContent=d.s;
   document.getElementById('ndv-value').textContent=fmCur(d.v,d.cur);
   const com=d.v*(d.pct/100);
-  document.getElementById('ndv-comm').textContent=com?fm(com):'—';
+  document.getElementById('ndv-comm').textContent=com?fmCur(com,d.cur):'—';
   const notesRow=document.getElementById('ndv-notes-row');
   document.getElementById('ndv-notes').textContent=d.n||'';
   notesRow.style.display=d.n?'':'none';
