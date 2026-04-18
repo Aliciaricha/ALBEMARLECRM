@@ -59,6 +59,8 @@ let CLIENT_DEAL_TASKS={}; // keyed by clientId → array of due/overdue deal tas
 const ini = n => n.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
 const daysSince = d => d ? Math.floor((TODAY - new Date(d))/86400000) : 9999;
 const fm = v => v>=1e6?'$'+(v/1e6).toFixed(1)+'m':v>=1e3?'$'+(v/1e3).toFixed(0)+'k':'$'+v.toLocaleString();
+const CURRENCY_SYM={GBP:'£',USD:'$',EUR:'€',AED:'AED '};
+function fmCur(v,cur){const s=CURRENCY_SYM[cur||'GBP']||((cur||'GBP')+' ');return v>=1e6?s+(v/1e6).toFixed(1)+'m':v>=1e3?s+(v/1e3).toFixed(0)+'k':s+v.toLocaleString();}
 const abbr = n => n.replace(/[()]/g,'').split(/[\s/&,]+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
 
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
@@ -105,6 +107,7 @@ function normaliseClient(r){
     relationship: r.relationship||'',
     proxyContact: r.proxy_contact||'',
     vip: interests.includes('VIP'),
+    dnd: interests.includes('DND'),
     dob: r.dob||null,
   };
 }
@@ -136,6 +139,7 @@ function normaliseDeal(r){
     id: r.id, clientId: r.client_id, pt: r.partner||'',
     cat: r.category||'Real Estate', v: Number(r.spend)||0,
     pct, s: r.status||'Waiting', n: r.notes||'',
+    cur: r.currency||'GBP',
   };
 }
 function normaliseCampaign(r){
@@ -285,6 +289,7 @@ function mkTasks(){
   CLIENTS.forEach(c=>{
     if(camCoveredIds.has(c.id)) return;
     if(mtgCoveredIds.has(c.id)) return; // meeting within 14d supersedes call/wa
+    if(c.dnd) return; // Do Not Disturb — suppress all WhatsApp/call tasks
     const rel=REL_CADENCES[c.relationship];
     if(!rel||c.relationship==='Archive'||!c.relationship) return;
     const wa=daysSince(c.wa), cl=daysSince(c.call);
@@ -666,23 +671,34 @@ function rDeals(){
     document.getElementById('d-sg-'+key+'-n').textContent=sd.length+(sd.length===1?' deal':' deals');
   });
 
-  // Flat deal list
+  // Grouped deal list: Confirmed → Negotiation → Tentative → Waiting
   const list=document.getElementById('deal-list'); list.innerHTML='';
-  DEALS.forEach((d,i)=>{
-    const client=CLIENTS.find(c=>c.id===d.clientId);
-    const cname=client?client.name:d.clientId;
-    const com=d.v*(d.pct/100);
-    const el=document.createElement('div');
-    el.className='dc gc-s a'; el.style.animationDelay=(i*0.05)+'s';
-    el.onclick=()=>openDealModal(d.clientId,d.id);
-    el.innerHTML=`<div class="dc-top">
-      <div><div class="dc-cli">${cname}</div><div class="dc-par">${d.pt} · ${d.cat}</div></div>
-      <span class="pill p-gh" style="font-size:9px;flex-shrink:0">${d.s}</span>
-    </div>
-    <div class="dc-bot">
-      <div><div class="dc-val">${fm(com)}</div><div class="dc-spend">${fm(d.v)} client spend</div></div>
-    </div>`;
-    list.appendChild(el);
+  const STAGE_ORDER=['Confirmed','Negotiation','Tentative','Waiting'];
+  const STAGE_PILL={'Confirmed':'p-grn','Negotiation':'p-amb','Tentative':'p-blu','Waiting':'p-gh'};
+  let cardIdx=0;
+  STAGE_ORDER.forEach(stage=>{
+    const staged=DEALS.filter(d=>d.s===stage);
+    if(!staged.length) return;
+    const hdr=document.createElement('div');
+    hdr.className='rec-cat-header';
+    hdr.textContent=stage;
+    list.appendChild(hdr);
+    staged.forEach(d=>{
+      const client=CLIENTS.find(c=>c.id===d.clientId);
+      const cname=client?client.name:d.clientId;
+      const com=d.v*(d.pct/100);
+      const el=document.createElement('div');
+      el.className='dc gc-s a'; el.style.animationDelay=(cardIdx++*0.05)+'s';
+      el.onclick=()=>openDealModal(d.clientId,d.id);
+      el.innerHTML=`<div class="dc-top">
+        <div><div class="dc-cli">${cname}</div><div class="dc-par">${d.pt} · ${d.cat}</div></div>
+        <span class="pill ${STAGE_PILL[stage]||'p-gh'}" style="font-size:9px;flex-shrink:0">${d.s}</span>
+      </div>
+      <div class="dc-bot">
+        <div><div class="dc-val">${fmCur(com,d.cur)}</div><div class="dc-spend">${fmCur(d.v,d.cur)} client spend</div></div>
+      </div>`;
+      list.appendChild(el);
+    });
   });
 }
 
@@ -1322,7 +1338,8 @@ function rClients(){
     const hasDeal=DEALS.some(d=>d.clientId===c.id);
     const cardTag=hasDeal?'<span class="pill p-gold pc-pill">Deal</span>':(c.int||[]).includes('High Potential')?'<span class="pill pc-pill" style="background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':'';
     const vipStar=c.vip?`<div class="pc-vip-star"><svg width="11" height="11" viewBox="0 0 24 24" fill="var(--gold)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>`:'';
-    div.innerHTML=`${vipStar}<div class="pc-av">${ini(c.name)}</div>
+    const dndMoon=c.dnd?`<div class="pc-dnd-moon"><svg width="10" height="10" viewBox="0 0 24 24" fill="var(--p-ind,#6c7fc4)" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>`:'';
+    div.innerHTML=`${vipStar}${dndMoon}<div class="pc-av">${ini(c.name)}</div>
   <div class="pc-info">
     <div class="pc-name">${c.name}</div>
     <div class="pc-sub">${c.role||c.city||''}</div>
@@ -1821,6 +1838,10 @@ async function openC(c, _skipActivityLoad=false){
         <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="${c.vip?'var(--gold)':'none'}" stroke="var(--gold)" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
         <div><div class="act-t" style="${c.vip?'color:var(--gold)':''}">${c.vip?'Remove VIP':'Mark as VIP'}</div><div class="act-s">${c.vip?'Remove VIP status from this client':'Pin to top of client list with star'}</div></div>
       </div>
+      <div class="act" onclick="toggleDnd('${c.id}')">
+        <div class="act-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="${c.dnd?'var(--p-ind,#6c7fc4)':'none'}" stroke="${c.dnd?'var(--p-ind,#6c7fc4)':'var(--fg2)'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
+        <div><div class="act-t" style="${c.dnd?'color:var(--p-ind,#6c7fc4)':''}">${c.dnd?'Remove Do Not Disturb':'Do Not Disturb'}</div><div class="act-s">${c.dnd?'Resume WhatsApp updates for this client':'Pause all WhatsApp updates for this client'}</div></div>
+      </div>
     </div>
     <div style="height:36px"></div>`;
   pushProf('ps-client');
@@ -1924,6 +1945,21 @@ async function toggleVip(clientId){
   rClients();
   openC(c);
   showToast(c.vip?'VIP status added ✓':'VIP status removed');
+}
+async function toggleDnd(clientId){
+  const c=CLIENTS.find(x=>x.id===clientId); if(!c) return;
+  if(c.dnd){
+    c.int=c.int.filter(i=>i!=='DND');
+    c.dnd=false;
+  } else {
+    c.int=[...c.int,'DND'];
+    c.dnd=true;
+  }
+  const {error:dndErr}=await SB.from('clients').update({interests:c.int}).eq('id',clientId);
+  if(dndErr){ console.error('DND save error:',dndErr); showToast('Save failed: '+dndErr.message); return; }
+  rClients();
+  openC(c);
+  showToast(c.dnd?'Do Not Disturb enabled 🌙':'Do Not Disturb removed');
 }
 
 let scheduleMeetingClientId=null, editingMeetingId=null;
@@ -2361,8 +2397,9 @@ function openEditClient(id){
 async function saveEditClient(){
   const c=CLIENTS.find(x=>x.id===editClientId); if(!c) return;
   const ints=[...document.querySelectorAll('#ec-int-chips .int-chip.on, #ec-tag-chips .int-chip.on')].map(el=>el.textContent);
-  // VIP is toggled via the star button, not the edit form — always preserve it
+  // VIP and DND are toggled via their own buttons, not the edit form — always preserve them
   if(c.vip && !ints.includes('VIP')) ints.push('VIP');
+  if(c.dnd && !ints.includes('DND')) ints.push('DND');
   const dobVal=document.getElementById('ec-dob')?.value||null;
   const updates={
     name:document.getElementById('ec-name').value.trim()||c.name,
@@ -2554,12 +2591,13 @@ Rules: open with [Name], warm luxury tone, 3-4 sentences max, no emojis unless c
 function updateDealCommDisplay(){
   const partnerName=document.getElementById('nd-partner')?.value||'';
   const v=parseFloat(document.getElementById('nd-value')?.value)||0;
+  const cur=document.getElementById('nd-currency')?.value||'GBP';
   const pct=calcDealPct(partnerName);
   const el=document.getElementById('nd-comm-display'); if(!el) return;
   if(!pct){ el.textContent='—'; el.title=''; return; }
   const p=PARTNERS.find(x=>x.name===partnerName);
   const label=`${p?.fee||''}${p?.bizFee?' × '+p.bizFee:''} = ${pct.toFixed(2)}%`;
-  el.textContent=v?`${fm(v*(pct/100))} (${pct.toFixed(2)}%)`:label;
+  el.textContent=v?`${fmCur(v*(pct/100),cur)} (${pct.toFixed(2)}%)`:label;
 }
 
 // ── DEAL MODAL ────────────────────────────────────────────────────
@@ -2584,6 +2622,7 @@ function openDealModal(presetClientId, editDealId){
       ps.value=d.pt;
       document.getElementById('nd-cat').value=d.cat;
       document.getElementById('nd-status').value=d.s;
+      document.getElementById('nd-currency').value=d.cur||'GBP';
       document.getElementById('nd-value').value=d.v;
       document.getElementById('nd-notes').value=d.n;
       document.getElementById('deal-modal-title').textContent='Edit Deal';
@@ -2597,6 +2636,7 @@ function openDealModal(presetClientId, editDealId){
     document.getElementById('deal-modal-title').textContent='New Deal';
     document.getElementById('deal-submit-btn').textContent='Add Deal';
     ['nd-value','nd-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('nd-currency').value='GBP';
     tasksSection.style.display='none';
     taskForm.style.display='none';
     if(delBtn) delBtn.style.display='none';
@@ -2733,6 +2773,7 @@ async function saveDeal(){
     category:document.getElementById('nd-cat').value,
     status:document.getElementById('nd-status').value,
     spend:v, commission_rate:pct,
+    currency:document.getElementById('nd-currency').value||'GBP',
     notes:document.getElementById('nd-notes').value.trim(),
   };
 

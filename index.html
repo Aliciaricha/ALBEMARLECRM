@@ -555,7 +555,18 @@
         </div>
       </div>
       <div class="form-row">
-        <div class="form-field"><label>Deal Value (£/$)</label><input type="number" id="nd-value" placeholder="e.g. 5000000" oninput="updateDealCommDisplay()"></div>
+        <div class="form-field">
+          <label>Deal Value</label>
+          <div style="display:flex;gap:6px">
+            <select id="nd-currency" style="width:74px;flex-shrink:0" onchange="updateDealCommDisplay()">
+              <option value="GBP">£ GBP</option>
+              <option value="USD">$ USD</option>
+              <option value="EUR">€ EUR</option>
+              <option value="AED">AED</option>
+            </select>
+            <input type="number" id="nd-value" placeholder="e.g. 5000000" oninput="updateDealCommDisplay()" style="flex:1;min-width:0">
+          </div>
+        </div>
         <div class="form-field"><label>My Commission</label><div id="nd-comm-display" style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--gold);font-weight:300;padding:6px 0">—</div></div>
       </div>
       <div class="form-field"><label>Notes</label><input type="text" id="nd-notes" placeholder="e.g. Largest deal in pipeline"></div>
