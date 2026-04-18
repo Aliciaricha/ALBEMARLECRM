@@ -1451,7 +1451,6 @@ function rClients(){
   <div class="pc-info">
     <div class="pc-name">${c.name}</div>
     <div class="pc-sub">${c.role||c.city||''}</div>
-    ${c.relationship==='Proxy'&&c.proxyContact?`<div class="pc-proxy">via ${c.proxyContact}</div>`:''}
   </div>
   <div class="pc-r">${cardTag}</div>`;
     el.appendChild(div);
