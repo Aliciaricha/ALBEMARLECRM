@@ -21,13 +21,15 @@ const CC = {'Follow-Up':'p-blu', WhatsApp:'p-grn', Calling:'p-blu', Personal:'p-
 // ── RELATIONSHIP CADENCES ─────────────────────────────────────────
 const DEFAULT_REL_CADENCES = {
   Personal: {waD:14, cD:30,  label:'Personal', p:1},
-  Close:    {waD:28, cD:null,label:'Close',    p:2},
-  General:  {waD:28, cD:null,label:'General',  p:3},
-  Proxy:    {waD:56, cD:null,label:'Proxy',    p:4},
-  Archive:  {waD:84, cD:null,label:'Archive',  p:5},
+  General:  {waD:30, cD:60,  label:'General',  p:2},
+  Proxy:    {waD:30, cD:60,  label:'Proxy',    p:3},
+  Archive:  {waD:90, cD:null,label:'Archive',  p:4},
 };
 let REL_CADENCES = {};
+const CADENCE_VERSION = 3;
 function loadRelCadences(){
+  const storedV=parseInt(localStorage.getItem('rel_cadences_v')||'0');
+  if(storedV<CADENCE_VERSION){ localStorage.removeItem('rel_cadences'); localStorage.setItem('rel_cadences_v',CADENCE_VERSION); }
   try{ const saved=JSON.parse(localStorage.getItem('rel_cadences')||'null'); REL_CADENCES=saved||{}; }
   catch(e){ REL_CADENCES={}; }
   Object.keys(DEFAULT_REL_CADENCES).forEach(k=>{ if(!REL_CADENCES[k]) REL_CADENCES[k]={...DEFAULT_REL_CADENCES[k]}; });
@@ -329,7 +331,7 @@ function mkTasks(){
       const ov=cl-rel.cD;
       t.push({id:'cl-'+c.id, nm:c.name, act:'Call '+c.name,
         why:cl===9999?'Never called · '+c.relationship+' relationship':`${cl}d since last call · due every ${rel.cD}d`,
-        urg:ov>14?'urgent':ov>=0?'soon':'normal', pri:rel.p*10+1+(c.deal?0:5)});
+        urg:ov>=7?'urgent':'due', pri:rel.p*10+1+(c.deal?0:5)});
       return; // call due — WhatsApp suppressed
     }
     if(waDue){
@@ -337,7 +339,7 @@ function mkTasks(){
       const lastAnySrc=cl<=wa?`${cl}d since last call`:`${wa}d since last message`;
       t.push({id:'wa-'+c.id, nm:c.name, act:'WhatsApp '+c.name,
         why:lastAny===9999?'Never contacted · '+c.relationship+' relationship':`${lastAnySrc} · due every ${rel.waD}d`,
-        urg:ov>7?'urgent':ov>=0?'soon':'normal', pri:rel.p*10+(c.deal?0:5)});
+        urg:ov>=7?'urgent':'due', pri:rel.p*10+(c.deal?0:5)});
     }
   });
 
@@ -350,7 +352,7 @@ function mkTasks(){
     const label=daysUntil<0?`${Math.abs(daysUntil)}d overdue`:daysUntil===0?'Today':daysUntil===1?'Tomorrow':`In ${daysUntil} days`;
     const clientName=c?c.name:'Unknown';
     t.push({id:'mtg-'+m.id, nm:clientName, act:`Personal meeting with ${clientName}`,
-      why:m.title?`${m.title} · ${label}`:label, urg:daysUntil<0?'urgent':daysUntil<=1?'soon':'normal',
+      why:m.title?`${m.title} · ${label}`:label, urg:daysUntil<-7?'urgent':daysUntil<=1?'due':'waiting',
       pri:3, isMtg:true, clientObj:c||null, mtgId:m.id});
   });
 
@@ -371,7 +373,7 @@ function updateProgressRing(tot, nd, urg, desc){
   document.getElementById('prog-desc').textContent=desc;
 }
 
-function rHome(){
+async function rHome(){
   // Quick stats row (always)
   const tc=DEALS.reduce((s,d)=>s+toUSD(d.v*(d.pct/100),d.cur),0);
   document.getElementById('qs-pipe').textContent=fm(tc);
@@ -379,73 +381,92 @@ function rHome(){
   document.getElementById('qs-cam').textContent=CAMPAIGNS.length;
   document.getElementById('qs-par').textContent=PARTNERS.length;
 
-  const list=document.getElementById('task-list'); list.innerHTML='';
+  const list=document.getElementById('task-list');
 
-  if(homeTab==='deals'){
-    updateProgressRing(0,0,0,'Loading deal tasks…');
-    renderHomeDealTasks();
-    return;
+  // Load deal tasks if not cached
+  if(homeDealTasks===null){
+    list.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
+    const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false}).limit(5000);
+    homeDealTasks=(data||[]).filter(t=>!!t.due_date);
+  }
+  list.innerHTML='';
+
+  const todayD=new Date(); todayD.setHours(0,0,0,0);
+  function dealUrg(due){
+    const d=new Date(due); d.setHours(0,0,0,0);
+    const ov=Math.floor((todayD-d)/86400000);
+    return ov>=7?'urgent':ov>=0?'due':'waiting';
   }
 
-  // ── Network tab ────────────────────────────────────────────────
-  const tasks=mkTasks(), tot=tasks.length, nd=doneTasks.size;
-  const urg=tasks.filter(t=>t.urg==='urgent'&&!doneTasks.has(t.id)).length;
-  updateProgressRing(tot,nd,urg,
-    nd===tot&&tot>0?'All done — exceptional work.':`${tot-nd} task${tot-nd===1?'':'s'} remaining today`);
-
+  const netTasks=mkTasks();
   const BUCKETS=[
-    {key:'followups',  label:'Follow-Ups',          tasks:[]},
-    {key:'mandates',   label:'Mandates',             tasks:[]},
-    {key:'luxury',     label:'Luxury',               tasks:[]},
-    {key:'holiday',    label:'Holidays & Birthdays', tasks:[]},
+    {key:'deals',    label:'Deals',              items:[]},
+    {key:'followups',label:'Follow-Ups',         items:[]},
+    {key:'mandates', label:'Mandates',           items:[]},
+    {key:'luxury',   label:'Luxury',             items:[]},
+    {key:'seasonal', label:'Seasonal Campaigns', items:[]},
   ];
-  tasks.forEach(t=>{
+
+  homeDealTasks.forEach(t=>BUCKETS[0].items.push({isDeal:true, t, urg:dealUrg(t.due_date)}));
+  netTasks.forEach(t=>{
     const cam=t.camId?CAMPAIGNS.find(c=>c.id===t.camId):null;
     let b;
     if(cam){
-      if(cam.type==='Mandate')                                                          b=BUCKETS[1];
-      else if(cam.type==='Seasonal'||cam.type==='Triggered')                           b=BUCKETS[3];
-      else if(cam.type==='Follow-Up'||cam.type==='WhatsApp'||cam.type==='Calling'||cam.type==='Personal') b=BUCKETS[0];
-      else                                                                              b=BUCKETS[2];
-    } else if(t.isMtg) { b=BUCKETS[0]; }
-    else { b=BUCKETS[0]; }
-    b.tasks.push(t);
+      if(cam.type==='Mandate') b=BUCKETS[2];
+      else if(cam.type==='Seasonal'||cam.type==='Triggered') b=BUCKETS[4];
+      else if(['Follow-Up','WhatsApp','Calling','Personal'].includes(cam.type)) b=BUCKETS[1];
+      else b=BUCKETS[3];
+    } else b=BUCKETS[1]; // cadence + meetings
+    b.items.push({isDeal:false, t, urg:t.urg});
   });
+
+  const allItems=BUCKETS.flatMap(b=>b.items);
+  const tot=allItems.length+doneDealTasksToday;
+  const nd=doneTasks.size+doneDealTasksToday;
+  const urg=allItems.filter(x=>x.urg==='urgent').length;
+  updateProgressRing(tot,nd,urg,
+    nd===tot&&tot>0?'All done — exceptional work.':`${tot-nd} task${tot-nd===1?'':'s'} remaining`);
 
   let gi=0;
   BUCKETS.forEach(bucket=>{
-    if(!bucket.tasks.length) return;
+    if(!bucket.items.length) return;
     const hdr=document.createElement('div');
     hdr.className='task-group-hdr'; hdr.textContent=bucket.label;
     list.appendChild(hdr);
-    bucket.tasks.forEach(t=>{
-      const isDone=doneTasks.has(t.id);
+    bucket.items.forEach(({isDeal, t, urg})=>{
       const el=document.createElement('div');
-      el.className=`tc ${isDone?'done':t.isCam?'campaign':t.urg} a`;
       el.style.animationDelay=(gi++*0.04)+'s';
-      if(isDone) el.style.display='none'; // completed tasks hidden from start on re-render
-      const avClass=t.isCam?'cam-av':'';
-      const avContent=t.isCam?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>':ini(t.nm);
-      el.innerHTML=`<div class="tc-av ${avClass}">${avContent}</div>
-        <div class="tc-body"><div class="tc-act">${t.act}</div><div class="tc-why">${t.why}</div></div>
-        <div class="chk ${isDone?'on':''}" onclick="tick('${t.id}',this,event)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>`;
-      if(t.isCam){
-        el.onclick=(e)=>{ if(e.target.closest('.chk')) return;
-          const cam=CAMPAIGNS.find(c=>c.id===t.camId);
-          if(t.clientObj) openWaSheet(t.clientObj,cam);
-          else openCampaign(cam);
-        };
-      } else if(t.isMtg){
-        el.onclick=(e)=>{ if(e.target.closest('.chk')) return; openEditMeeting(t.mtgId); };
+      if(isDeal){
+        el.className=`tc ${urg} a`;
+        const deal=DEALS.find(d=>d.id===t.deal_id);
+        const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
+        const act=client?`${t.title} \u2014 ${client.name}`:t.title;
+        el.innerHTML=`<div class="tc-av deal-tc-av"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <div class="tc-body" style="cursor:pointer"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
+          <div class="chk"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
+        el.querySelector('.chk').onclick=(ev)=>tickDealTask(t.id,el.querySelector('.chk'),ev);
+        el.querySelector('.tc-body').onclick=(ev)=>{ev.stopPropagation();openRescheduleTask(t.id,t.title,t.due_date);};
+        if(deal) el.onclick=(ev)=>{if(ev.target.closest('.chk')||ev.target.closest('.tc-body')) return; openDealModal(deal.clientId,deal.id);};
       } else {
-        const isCall=t.id.startsWith('cl-');
-        const client=CLIENTS.find(c=>'wa-'+c.id===t.id||'cl-'+c.id===t.id);
-        if(client){
+        const avClass=t.isCam?'cam-av':'';
+        const avContent=t.isCam?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>':ini(t.nm);
+        el.className=`tc ${t.isCam?'campaign':urg} a`;
+        const isDone=doneTasks.has(t.id);
+        if(isDone){ el.style.display='none'; }
+        el.innerHTML=`<div class="tc-av ${avClass}">${avContent}</div>
+          <div class="tc-body"><div class="tc-act">${t.act}</div><div class="tc-why">${t.why}</div></div>
+          <div class="chk ${isDone?'on':''}" onclick="tick('${t.id}',this,event)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
+        if(t.isCam){
           el.onclick=(e)=>{ if(e.target.closest('.chk')) return;
-            openSnoozeCadence(client.id, isCall?'call':'wa');
+            const cam=CAMPAIGNS.find(c=>c.id===t.camId);
+            if(t.clientObj) openWaSheet(t.clientObj,cam); else openCampaign(cam);
           };
+        } else if(t.isMtg){
+          el.onclick=(e)=>{ if(e.target.closest('.chk')) return; openEditMeeting(t.mtgId); };
+        } else {
+          const isCall=t.id.startsWith('cl-');
+          const client=CLIENTS.find(c=>'wa-'+c.id===t.id||'cl-'+c.id===t.id);
+          if(client) el.onclick=(e)=>{ if(e.target.closest('.chk')) return; openSnoozeCadence(client.id,isCall?'call':'wa'); };
         }
       }
       list.appendChild(el);
@@ -453,13 +474,7 @@ function rHome(){
   });
 }
 
-function switchHomeTab(tab){
-  if(tab===homeTab) return;
-  doneDealTasksToday=0;
-  homeTab=tab; homeDealTasks=null;
-  document.querySelectorAll('#s-home .home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
-  rHome();
-}
+function switchHomeTab(tab){ homeDealTasks=null; rHome(); }
 
 function dealTaskTimer(dueDate){
   if(!dueDate) return '';
@@ -647,7 +662,6 @@ async function tick(id, el, e){
     doneTasks.add(id);
     el.classList.add('on');
     const card=el.parentElement;
-    card.classList.add('done');
     await SB.from('task_completions').upsert({task_key:id,reset_date:today},{onConflict:'task_key'});
     // Auto-log contact for cadence tasks so cadence clock resets permanently
     if(id.startsWith('wa-')){
@@ -668,10 +682,10 @@ async function tick(id, el, e){
       if(m?.client_id) await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:new Date().toISOString()});
     }
     // Update ring counts without re-rendering list
-    const tasks=mkTasks(), tot=tasks.length, nd=doneTasks.size;
+    const tasks=mkTasks(), tot=tasks.length+(homeDealTasks?.length||0)+doneDealTasksToday, nd=doneTasks.size+doneDealTasksToday;
     const urg=tasks.filter(t=>t.urg==='urgent'&&!doneTasks.has(t.id)).length;
     updateProgressRing(tot,nd,urg,
-      nd===tot&&tot>0?'All done — exceptional work.':`${tot-nd} task${tot-nd===1?'':'s'} remaining today`);
+      nd===tot&&tot>0?'All done — exceptional work.':`${tot-nd} task${tot-nd===1?'':'s'} remaining`);
     // Fade out after 2 s
     setTimeout(()=>{
       card.style.transition='opacity 0.45s, max-height 0.45s, margin-bottom 0.45s, padding 0.45s';
@@ -2389,6 +2403,14 @@ async function saveEditRec(){
   rRecs(); showToast('Updated ✓');
 }
 
+async function deleteRec(){
+  if(!editRecId||!confirm('Delete this rolodex entry?')) return;
+  const {error}=await SB.from('recommendations').delete().eq('id',editRecId);
+  if(error){ showToast('Could not delete'); return; }
+  RECS=RECS.filter(x=>x.id!==editRecId);
+  closeModal('modal-edit-rec'); rRecs(); showToast('Deleted');
+}
+
 // ── FILTER & NAV ─────────────────────────────────────────────────
 function setF(el,type,val){
   cF=val;document.querySelectorAll('#c-chips .chip').forEach(c=>c.classList.toggle('on',c===el));rPartners();
@@ -2541,6 +2563,20 @@ function openEditClient(id){
   }
 }
 
+async function deleteClient(){
+  if(!editClientId||!confirm('Delete this client? This cannot be undone.')) return;
+  const {error}=await SB.from('clients').delete().eq('id',editClientId);
+  if(error){ showToast('Could not delete'); return; }
+  CLIENTS=CLIENTS.filter(x=>x.id!==editClientId);
+  closeModal('modal-edit-client');
+  // Close profile if open
+  const ps=document.getElementById('ps-client');
+  if(ps&&!ps.classList.contains('hidden')) ps.classList.add('hidden');
+  if(curTab==='clients') rClients();
+  if(curTab==='home') rHome();
+  showToast('Client deleted');
+}
+
 async function saveEditClient(){
   const c=CLIENTS.find(x=>x.id===editClientId); if(!c) return;
   const ints=[...document.querySelectorAll('#ec-int-chips .int-chip.on, #ec-tag-chips .int-chip.on')].map(el=>el.textContent);
@@ -2609,6 +2645,18 @@ function openEditPartner(id){
   document.getElementById('ep-bizfee').value=p.bizFee||'';
   document.getElementById('ep-notes').value=p.notes||'';
   openModal('modal-edit-partner');
+}
+
+async function deletePartner(){
+  if(!editPartnerId||!confirm('Delete this partner?')) return;
+  const {error}=await SB.from('partners').delete().eq('id',editPartnerId);
+  if(error){ showToast('Could not delete'); return; }
+  PARTNERS=PARTNERS.filter(x=>x.id!==editPartnerId);
+  closeModal('modal-edit-partner');
+  const ps=document.getElementById('ps-partner');
+  if(ps&&!ps.classList.contains('hidden')) ps.classList.add('hidden');
+  if(curTab==='partners') rPartners();
+  showToast('Partner deleted');
 }
 
 async function saveEditPartner(){
