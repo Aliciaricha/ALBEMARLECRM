@@ -40,6 +40,7 @@ let doneTasks = new Set(); // task_key set from DB
 let cF='All', curTab='home';
 let relF='All'; // KEEP for backward compat but no longer used in UI
 let clientFilters={relationship:null, nw:null, interest:null, tag:null}; // active filter state
+let recFilters={category:null,country:null};
 let selSegVal='All', editSegVal='All';
 let editClientId=null, editPartnerId=null, editCampaignId=null;
 let editingDealId=null;
@@ -60,7 +61,7 @@ const ini = n => n.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()
 const daysSince = d => d ? Math.floor((TODAY - new Date(d))/86400000) : 9999;
 const fm = v => v>=1e6?'$'+(v/1e6).toFixed(1)+'m':v>=1e3?'$'+(v/1e3).toFixed(0)+'k':'$'+v.toLocaleString();
 const CURRENCY_SYM={GBP:'£',USD:'$',EUR:'€',AED:'AED '};
-function fmCur(v,cur){const s=CURRENCY_SYM[cur||'GBP']||((cur||'GBP')+' ');return v>=1e6?s+(v/1e6).toFixed(1)+'m':v>=1e3?s+(v/1e3).toFixed(0)+'k':s+v.toLocaleString();}
+function fmCur(v,cur){const s=CURRENCY_SYM[cur||'GBP']||((cur||'GBP')+' ');return v>=1e6?s+(v/1e6).toFixed(1)+'m':v>=1e3?s+(v/1e3).toFixed(1).replace(/\.0$/,'')+'k':s+v.toLocaleString();}
 function fmUSD(v){return fm(Math.round(v/10)*10);}
 
 // FX rates (base USD) — cached per day
@@ -2287,8 +2288,14 @@ function openP(p){
 // ── RECOMMENDATIONS ───────────────────────────────────────────────
 function rRecs(){
   const list=document.getElementById('rec-list'); list.innerHTML='';
+  const hasFilter=recFilters.category||recFilters.country;
+  const lbl=document.getElementById('rec-filter-lbl');
+  if(lbl) lbl.textContent=hasFilter?'Filtered':'Filter';
+  let recs=RECS;
+  if(recFilters.category) recs=recs.filter(r=>r.category===recFilters.category);
+  if(recFilters.country) recs=recs.filter(r=>r.country===recFilters.country);
   let lastCat='';
-  RECS.forEach(r=>{
+  recs.forEach(r=>{
     if(r.category!==lastCat){
       const h=document.createElement('div');
       h.className='rec-cat-header'; h.textContent=r.category;
@@ -2306,6 +2313,27 @@ function rRecs(){
       ${r.country?`<div class="rec-ctry">${r.country}</div>`:''}`;
     list.appendChild(el);
   });
+}
+
+function openRecFilters(){
+  const cats=[...new Set(RECS.map(r=>r.category).filter(Boolean))].sort();
+  document.getElementById('filter-rec-cats').innerHTML=cats.map(c=>`<div class="fchip${recFilters.category===c?' on':''}" data-group="rec-category" data-val="${c}" onclick="toggleFChip(this)">${c}</div>`).join('');
+  const countries=[...new Set(RECS.map(r=>r.country).filter(Boolean))].sort();
+  document.getElementById('filter-rec-countries').innerHTML=countries.map(c=>`<div class="fchip${recFilters.country===c?' on':''}" data-group="rec-country" data-val="${c}" onclick="toggleFChip(this)">${c}</div>`).join('');
+  openModal('modal-rolodex-filters');
+}
+
+function applyRecFilters(){
+  recFilters.category=document.querySelector('.fchip[data-group="rec-category"].on')?.dataset.val||null;
+  recFilters.country=document.querySelector('.fchip[data-group="rec-country"].on')?.dataset.val||null;
+  closeModal('modal-rolodex-filters');
+  rRecs();
+}
+
+function clearRecFilters(){
+  recFilters={category:null,country:null};
+  closeModal('modal-rolodex-filters');
+  rRecs();
 }
 
 async function saveRec(){
