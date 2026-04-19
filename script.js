@@ -374,6 +374,7 @@ function updateProgressRing(tot, nd, urg, desc){
 }
 
 async function rHome(){
+  await getFxRates();
   // Quick stats row (always)
   const tc=DEALS.reduce((s,d)=>s+toUSD(d.v*(d.pct/100),d.cur),0);
   document.getElementById('qs-pipe').textContent=fm(tc);
