@@ -137,6 +137,7 @@ function normaliseClient(r){
     proxyContact: r.proxy_contact||'',
     vip: interests.includes('VIP'),
     dnd: interests.includes('DND'),
+    prospect: interests.includes('Prospect'),
     dob: r.dob||null,
   };
 }
@@ -1466,7 +1467,8 @@ function rClients(){
     div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
     div.onclick=()=>openC(c);
     const hasDeal=DEALS.some(d=>d.clientId===c.id);
-    const cardTag=hasDeal?'<span class="pill p-gold pc-pill">Deal</span>':(c.int||[]).includes('High Potential')?'<span class="pill pc-pill" style="background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':'';
+    const _int=c.int||[];
+    const cardTag=hasDeal?'<span class="pill p-gold pc-pill">Deal</span>':c.prospect?'<span class="pill p-blu pc-pill">Prospect</span>':_int.includes('High Potential')?'<span class="pill pc-pill" style="background:rgba(138,109,62,0.1);color:var(--gold);border-color:rgba(138,109,62,0.25)">High Potential</span>':'';
     const vipStar=c.vip?`<div class="pc-vip-star"><svg width="11" height="11" viewBox="0 0 24 24" fill="var(--gold)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>`:'';
     div.innerHTML=`${vipStar}<div class="pc-av">${ini(c.name)}</div>
   <div class="pc-info">
@@ -1935,7 +1937,7 @@ async function openC(c, _skipActivityLoad=false){
       ${nextFollowUpStr?`<div class="sec-row"><div class="sec-k">Next Follow-Up</div><div class="sec-v ${nextFollowUpOv?'ov':''}">${nextFollowUpStr}</div></div>`:''}
       ${c.dob?`<div class="sec-row"><div class="sec-k">Birthday</div><div class="sec-v">${new Date(c.dob+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long'})}</div></div>`:''}
     </div>
-    ${(()=>{const di=c.int.filter(x=>x!=='VIP'&&x!=='DND');return di.length?`<div class="prof-sec"><div class="sec-lbl">Interests & Segments</div><div class="itags">${di.map(x=>`<span class="pill p-gh">${x}</span>`).join('')}</div></div>`:''})()}
+    ${(()=>{const di=c.int.filter(x=>!['VIP','DND','High Potential','Prospect'].includes(x));return di.length?`<div class="prof-sec"><div class="sec-lbl">Interests & Segments</div><div class="itags">${di.map(x=>`<span class="pill p-gh">${x}</span>`).join('')}</div></div>`:''})()}
     ${camHtml?`<div class="prof-sec"><div class="sec-lbl">Active Campaigns</div><div class="itags" style="margin-top:4px">${camHtml}</div></div>`:''}
     <div class="prof-sec"><div class="sec-lbl">Deals & Commission</div>${dHtml}</div>
     ${c.notes?`<div class="prof-sec"><div class="sec-lbl">Notes</div><div class="sec-notes">${c.notes}</div></div>`:''}
@@ -2581,9 +2583,8 @@ async function deleteClient(){
 async function saveEditClient(){
   const c=CLIENTS.find(x=>x.id===editClientId); if(!c) return;
   const ints=[...document.querySelectorAll('#ec-int-chips .int-chip.on, #ec-tag-chips .int-chip.on')].map(el=>el.textContent);
-  // VIP and DND are toggled via their own buttons, not the edit form — always preserve them
+  // VIP is toggled via the star button only — preserve it from the form
   if(c.vip && !ints.includes('VIP')) ints.push('VIP');
-  if(c.dnd && !ints.includes('DND')) ints.push('DND');
   const dobVal=document.getElementById('ec-dob')?.value||null;
   const updates={
     name:document.getElementById('ec-name').value.trim()||c.name,
