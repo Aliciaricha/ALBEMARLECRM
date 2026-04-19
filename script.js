@@ -42,7 +42,7 @@ let doneTasks = new Set(); // task_key set from DB
 let cF='All', curTab='home';
 let relF='All'; // KEEP for backward compat but no longer used in UI
 let clientFilters={relationship:null, nw:null, interest:null, tag:null}; // active filter state
-let recFilters={category:null,country:null};
+let recCat='All';
 let selSegVal='All', editSegVal='All';
 let editClientId=null, editPartnerId=null, editCampaignId=null;
 let editingDealId=null;
@@ -2309,78 +2309,71 @@ function openP(p){
 }
 
 // ── RECOMMENDATIONS ───────────────────────────────────────────────
+function setRecCat(el,val){
+  recCat=val;
+  document.querySelectorAll('#rec-chips .chip').forEach(c=>c.classList.toggle('on',c===el));
+  rRecs();
+}
+
+function openRolodexEntry(id,isPartner){
+  if(isPartner){ const p=PARTNERS.find(x=>x.id===id); if(p) openP(p); }
+  else openEditRec(id);
+}
+
 function rRecs(){
   const list=document.getElementById('rec-list'); list.innerHTML='';
-  const hasFilter=recFilters.category||recFilters.country;
-  const lbl=document.getElementById('rec-filter-lbl');
-  if(lbl) lbl.textContent=hasFilter?'Filtered':'Filter';
-  let recs=RECS;
-  if(recFilters.category) recs=recs.filter(r=>r.category===recFilters.category);
-  if(recFilters.country) recs=recs.filter(r=>r.country===recFilters.country);
 
-  // Group by category, then by company name within each category
-  const byCategory=[];
-  const catIdx={};
-  recs.forEach(r=>{
+  // Combine RECS + PARTNERS into one unified list
+  const all=[
+    ...RECS.map(r=>({...r, isPartner:false})),
+    ...PARTNERS.map(p=>({id:p.id, company:p.name, contact:p.contact, position:p.role, category:p.cat, country:p.country, notes:p.notes, isPartner:true})),
+  ];
+
+  // Build category chips from all entries
+  const chipsEl=document.getElementById('rec-chips');
+  if(chipsEl){
+    const cats=['All',...[...new Set(all.map(r=>r.category).filter(Boolean))].sort()];
+    chipsEl.innerHTML=cats.map(c=>`<div class="chip${recCat===c?' on':''}" onclick="setRecCat(this,${JSON.stringify(c)})">${c}</div>`).join('');
+  }
+
+  // Filter
+  const filtered=recCat==='All'?all:all.filter(r=>r.category===recCat);
+
+  // Group by category → company
+  const byCategory=[]; const catIdx={};
+  filtered.forEach(r=>{
     const cat=r.category||'Other';
-    if(catIdx[cat]===undefined){ catIdx[cat]=byCategory.length; byCategory.push({cat, companies:[]}); }
-    const group=byCategory[catIdx[cat]];
-    const existing=group.companies.find(c=>c.name===r.company);
+    if(catIdx[cat]===undefined){ catIdx[cat]=byCategory.length; byCategory.push({cat,companies:[]}); }
+    const grp=byCategory[catIdx[cat]];
+    const existing=grp.companies.find(c=>c.name===r.company);
     if(existing) existing.contacts.push(r);
-    else group.companies.push({name:r.company, contacts:[r]});
+    else grp.companies.push({name:r.company, contacts:[r]});
   });
 
-  byCategory.forEach(({cat, companies})=>{
-    const h=document.createElement('div');
-    h.className='rec-cat-header'; h.textContent=cat;
-    list.appendChild(h);
-
-    companies.forEach(({name, contacts})=>{
+  byCategory.forEach(({cat,companies})=>{
+    if(recCat==='All'){
+      const h=document.createElement('div');
+      h.className='rec-cat-header'; h.textContent=cat; list.appendChild(h);
+    }
+    companies.forEach(({name,contacts})=>{
       const el=document.createElement('div');
-      el.className='rec-item a';
-      el.style.alignItems='flex-start';
-      const first=contacts[0];
+      el.className='rec-item a'; el.style.alignItems='flex-start';
       const country=contacts.map(c=>c.country).find(Boolean)||'';
       const multi=contacts.length>1;
-
+      const anyPartner=contacts.some(c=>c.isPartner);
+      const avStyle=anyPartner?'background:rgba(138,109,62,0.10);border-color:var(--gold-border);color:var(--gold)':'';
       const contactsHTML=contacts.map((r,i)=>`
-        <div class="rec-contact-row${multi?' rec-contact-clickable':''}${i>0?' rec-contact-divider':''}" ${multi?`onclick="event.stopPropagation();openEditRec('${r.id}')"`:''}>
+        <div class="rec-contact-row${multi?' rec-contact-clickable':''}${i>0?' rec-contact-divider':''}" ${multi?`onclick="event.stopPropagation();openRolodexEntry(${JSON.stringify(r.id)},${r.isPartner})"`:''}>
           ${r.contact||r.position?`<div class="rec-ct">${[r.contact,r.position].filter(Boolean).join(' · ')}</div>`:''}
           ${r.notes?`<div class="rec-notes">${r.notes}</div>`:''}
         </div>`).join('');
-
-      el.innerHTML=`<div class="rec-av" style="margin-top:2px">${(name||'?')[0]}</div>
-        <div style="flex:1;min-width:0">
-          <div class="rec-co">${name}</div>
-          ${contactsHTML}
-        </div>
+      el.innerHTML=`<div class="rec-av" style="margin-top:2px;${avStyle}">${(name||'?')[0]}</div>
+        <div style="flex:1;min-width:0"><div class="rec-co">${name}</div>${contactsHTML}</div>
         ${country?`<div class="rec-ctry" style="margin-top:2px">${country}</div>`:''}`;
-
-      if(!multi) el.onclick=()=>openEditRec(first.id);
+      if(!multi){ const s=contacts[0]; el.onclick=()=>openRolodexEntry(s.id,s.isPartner); }
       list.appendChild(el);
     });
   });
-}
-
-function openRecFilters(){
-  const cats=[...new Set(RECS.map(r=>r.category).filter(Boolean))].sort();
-  document.getElementById('filter-rec-cats').innerHTML=cats.map(c=>`<div class="fchip${recFilters.category===c?' on':''}" data-group="rec-category" data-val="${c}" onclick="toggleFChip(this)">${c}</div>`).join('');
-  const countries=[...new Set(RECS.map(r=>r.country).filter(Boolean))].sort();
-  document.getElementById('filter-rec-countries').innerHTML=countries.map(c=>`<div class="fchip${recFilters.country===c?' on':''}" data-group="rec-country" data-val="${c}" onclick="toggleFChip(this)">${c}</div>`).join('');
-  openModal('modal-rolodex-filters');
-}
-
-function applyRecFilters(){
-  recFilters.category=document.querySelector('.fchip[data-group="rec-category"].on')?.dataset.val||null;
-  recFilters.country=document.querySelector('.fchip[data-group="rec-country"].on')?.dataset.val||null;
-  closeModal('modal-rolodex-filters');
-  rRecs();
-}
-
-function clearRecFilters(){
-  recFilters={category:null,country:null};
-  closeModal('modal-rolodex-filters');
-  rRecs();
 }
 
 async function saveRec(){
