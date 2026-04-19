@@ -2261,7 +2261,7 @@ function rPartners(){
       <div class="pc-info"><div class="pc-name">${p.name}</div><div class="pc-sub">${p.contact}${p.role?' · '+p.role:''}</div></div>
       <div class="pc-r">
         ${p.fee?`<span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--gold);font-weight:300">${p.fee}</span>`:''}
-        <span class="pill p-gh" style="font-size:9px">${p.cat}</span>
+        ${p.country?`<span class="pill p-gh" style="font-size:9px">${p.country}</span>`:''}
       </div>`;
     el.appendChild(div);
   });
