@@ -291,6 +291,8 @@ function mkTasks(){
     const camWhy=campaignTiming(cam);
     const clients=getCampaignClients(cam);
     if(!clients.length){
+      const isBdayCam=/birthday/i.test(cam.name)||/birthday/i.test(cam.occ||'');
+      if(isBdayCam) return; // no upcoming birthdays — hide entirely
       const standaloneWhy=`0 clients · ${camWhy}`;
       t.push({id:'cam-'+cam.id, nm:'Campaign', act:cam.name,
         why:standaloneWhy, urg:'soon', pri:25, isCam:true, camId:cam.id, clientObj:null});
@@ -320,7 +322,8 @@ function mkTasks(){
     const rel=REL_CADENCES[c.relationship];
     if(!rel||c.relationship==='Archive'||!c.relationship) return;
     const wa=daysSince(c.wa), cl=daysSince(c.call);
-    const waDue=rel.waD&&wa>=rel.waD, clDue=rel.cD&&cl>=rel.cD;
+    const lastAny=Math.min(wa,cl); // most recent contact of any type — a call resets WA timer
+    const waDue=rel.waD&&lastAny>=rel.waD, clDue=rel.cD&&cl>=rel.cD;
     if(!waDue&&!clDue) return;
     if(clDue){
       const ov=cl-rel.cD;
@@ -330,9 +333,10 @@ function mkTasks(){
       return; // call due — WhatsApp suppressed
     }
     if(waDue){
-      const ov=wa-rel.waD;
+      const ov=lastAny-rel.waD;
+      const lastAnySrc=cl<=wa?`${cl}d since last call`:`${wa}d since last message`;
       t.push({id:'wa-'+c.id, nm:c.name, act:'WhatsApp '+c.name,
-        why:wa===9999?'Never contacted · '+c.relationship+' relationship':`${wa}d since last message · due every ${rel.waD}d`,
+        why:lastAny===9999?'Never contacted · '+c.relationship+' relationship':`${lastAnySrc} · due every ${rel.waD}d`,
         urg:ov>7?'urgent':ov>=0?'soon':'normal', pri:rel.p*10+(c.deal?0:5)});
     }
   });
@@ -369,7 +373,7 @@ function updateProgressRing(tot, nd, urg, desc){
 
 function rHome(){
   // Quick stats row (always)
-  const tc=DEALS.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
+  const tc=DEALS.reduce((s,d)=>s+toUSD(d.v*(d.pct/100),d.cur),0);
   document.getElementById('qs-pipe').textContent=fm(tc);
   document.getElementById('qs-cli').textContent=CLIENTS.length;
   document.getElementById('qs-cam').textContent=CAMPAIGNS.length;
@@ -807,7 +811,8 @@ function rCampaigns(){
     const rel=REL_CADENCES[c.relationship];
     if(!rel||c.relationship==='Archive'||!c.relationship) return false;
     if(rel.cD&&daysSince(c.call)>=rel.cD) return false;
-    return rel.waD&&daysSince(c.wa)>=rel.waD;
+    const lastAny=Math.min(daysSince(c.wa),daysSince(c.call));
+    return rel.waD&&lastAny>=rel.waD;
   });
   const _callDue=CLIENTS.filter(c=>{
     const rel=REL_CADENCES[c.relationship];
@@ -3067,7 +3072,7 @@ function closeWaSheet(e){ if(e.target===document.getElementById('wa-sheet-overla
 
 // ── UTILS ─────────────────────────────────────────────────────────
 function updateHomeStats(){
-  const tc=DEALS.reduce((s,d)=>s+(d.v*(d.pct/100)),0);
+  const tc=DEALS.reduce((s,d)=>s+toUSD(d.v*(d.pct/100),d.cur),0);
   document.getElementById('qs-pipe').textContent=fm(tc);
   document.getElementById('qs-cli').textContent=CLIENTS.length;
   document.getElementById('qs-cam').textContent=CAMPAIGNS.length;
