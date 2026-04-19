@@ -2316,24 +2316,48 @@ function rRecs(){
   let recs=RECS;
   if(recFilters.category) recs=recs.filter(r=>r.category===recFilters.category);
   if(recFilters.country) recs=recs.filter(r=>r.country===recFilters.country);
-  let lastCat='';
+
+  // Group by category, then by company name within each category
+  const byCategory=[];
+  const catIdx={};
   recs.forEach(r=>{
-    if(r.category!==lastCat){
-      const h=document.createElement('div');
-      h.className='rec-cat-header'; h.textContent=r.category;
-      list.appendChild(h); lastCat=r.category;
-    }
-    const el=document.createElement('div');
-    el.className='rec-item a';
-    el.onclick=()=>openEditRec(r.id);
-    el.innerHTML=`<div class="rec-av">${(r.company||'?')[0]}</div>
-      <div style="flex:1;min-width:0">
-        <div class="rec-co">${r.company}</div>
-        ${r.contact||r.position?`<div class="rec-ct">${[r.contact,r.position].filter(Boolean).join(' · ')}</div>`:''}
-        ${r.notes?`<div class="rec-notes">${r.notes}</div>`:''}
-      </div>
-      ${r.country?`<div class="rec-ctry">${r.country}</div>`:''}`;
-    list.appendChild(el);
+    const cat=r.category||'Other';
+    if(catIdx[cat]===undefined){ catIdx[cat]=byCategory.length; byCategory.push({cat, companies:[]}); }
+    const group=byCategory[catIdx[cat]];
+    const existing=group.companies.find(c=>c.name===r.company);
+    if(existing) existing.contacts.push(r);
+    else group.companies.push({name:r.company, contacts:[r]});
+  });
+
+  byCategory.forEach(({cat, companies})=>{
+    const h=document.createElement('div');
+    h.className='rec-cat-header'; h.textContent=cat;
+    list.appendChild(h);
+
+    companies.forEach(({name, contacts})=>{
+      const el=document.createElement('div');
+      el.className='rec-item a';
+      el.style.alignItems='flex-start';
+      const first=contacts[0];
+      const country=contacts.map(c=>c.country).find(Boolean)||'';
+      const multi=contacts.length>1;
+
+      const contactsHTML=contacts.map((r,i)=>`
+        <div class="rec-contact-row${multi?' rec-contact-clickable':''}${i>0?' rec-contact-divider':''}" ${multi?`onclick="event.stopPropagation();openEditRec('${r.id}')"`:''}>
+          ${r.contact||r.position?`<div class="rec-ct">${[r.contact,r.position].filter(Boolean).join(' · ')}</div>`:''}
+          ${r.notes?`<div class="rec-notes">${r.notes}</div>`:''}
+        </div>`).join('');
+
+      el.innerHTML=`<div class="rec-av" style="margin-top:2px">${(name||'?')[0]}</div>
+        <div style="flex:1;min-width:0">
+          <div class="rec-co">${name}</div>
+          ${contactsHTML}
+        </div>
+        ${country?`<div class="rec-ctry" style="margin-top:2px">${country}</div>`:''}`;
+
+      if(!multi) el.onclick=()=>openEditRec(first.id);
+      list.appendChild(el);
+    });
   });
 }
 
