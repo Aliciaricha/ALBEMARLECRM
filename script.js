@@ -2333,20 +2333,23 @@ function rRecs(){
   const chipsEl=document.getElementById('rec-chips');
   if(chipsEl){
     const cats=['All',...[...new Set(all.map(r=>r.category).filter(Boolean))].sort()];
-    chipsEl.innerHTML=cats.map(c=>`<div class="chip${recCat===c?' on':''}" onclick="setRecCat(this,${JSON.stringify(c)})">${c}</div>`).join('');
+    chipsEl.innerHTML=cats.map(c=>`<div class="chip${recCat===c?' on':''}" onclick="setRecCat(this,'${c.replace(/'/g,"&#39;")}')">${c}</div>`).join('');
   }
 
-  // Filter
-  const filtered=recCat==='All'?all:all.filter(r=>r.category===recCat);
+  // Filter (case-insensitive category match)
+  const recCatLower=recCat.toLowerCase();
+  const filtered=recCat==='All'?all:all.filter(r=>(r.category||'').toLowerCase()===recCatLower);
 
   // Group by category → company (case-insensitive, trimmed key)
   const byCategory=[]; const catIdx={};
   filtered.forEach(r=>{
-    const cat=(r.category||'Other').trim();
+    const catRaw=(r.category||'Other').trim();
+    const catKey=catRaw.toLowerCase();
+    const cat=catRaw;
     const coKey=(r.company||'').trim().toLowerCase();
     const coDisplay=(r.company||'').trim();
-    if(catIdx[cat]===undefined){ catIdx[cat]=byCategory.length; byCategory.push({cat,companies:[]}); }
-    const grp=byCategory[catIdx[cat]];
+    if(catIdx[catKey]===undefined){ catIdx[catKey]=byCategory.length; byCategory.push({cat,companies:[]}); }
+    const grp=byCategory[catIdx[catKey]];
     const existing=grp.companies.find(c=>c.key===coKey);
     if(existing) existing.contacts.push(r);
     else grp.companies.push({name:coDisplay, key:coKey, contacts:[r]});
