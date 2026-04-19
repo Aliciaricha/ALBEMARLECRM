@@ -2339,15 +2339,17 @@ function rRecs(){
   // Filter
   const filtered=recCat==='All'?all:all.filter(r=>r.category===recCat);
 
-  // Group by category → company
+  // Group by category → company (case-insensitive, trimmed key)
   const byCategory=[]; const catIdx={};
   filtered.forEach(r=>{
-    const cat=r.category||'Other';
+    const cat=(r.category||'Other').trim();
+    const coKey=(r.company||'').trim().toLowerCase();
+    const coDisplay=(r.company||'').trim();
     if(catIdx[cat]===undefined){ catIdx[cat]=byCategory.length; byCategory.push({cat,companies:[]}); }
     const grp=byCategory[catIdx[cat]];
-    const existing=grp.companies.find(c=>c.name===r.company);
+    const existing=grp.companies.find(c=>c.key===coKey);
     if(existing) existing.contacts.push(r);
-    else grp.companies.push({name:r.company, contacts:[r]});
+    else grp.companies.push({name:coDisplay, key:coKey, contacts:[r]});
   });
 
   byCategory.forEach(({cat,companies})=>{
