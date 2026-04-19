@@ -2237,7 +2237,8 @@ async function tickFollowUpCam(camId, clientId, rowEl){
 
 // ── PARTNERS ──────────────────────────────────────────────────────
 function rPartners(){
-  let list=cF==='All'?[...PARTNERS]:[...PARTNERS.filter(p=>p.cat===cF)];
+  const financeMatch=cF==='Investment Bank';
+  let list=cF==='All'?[...PARTNERS]:[...PARTNERS.filter(p=>financeMatch?(p.cat==='Investment Bank'||p.cat==='Foreign Exchange'||p.cat==='Family Office'):p.cat===cF)];
   list.sort((a,b)=>{
     if(a.cat!==b.cat) return (a.cat||'').localeCompare(b.cat||'');
     return (a.name||'').localeCompare(b.name||'');
