@@ -2240,30 +2240,62 @@ function rPartners(){
   const financeMatch=cF==='Investment Bank';
   let list=cF==='All'?[...PARTNERS]:[...PARTNERS.filter(p=>financeMatch?(p.cat==='Investment Bank'||p.cat==='Foreign Exchange'||p.cat==='Family Office'):p.cat===cF)];
   list.sort((a,b)=>{
-    if(a.cat!==b.cat) return (a.cat||'').localeCompare(b.cat||'');
+    if((a.cat||'').toLowerCase()!==(b.cat||'').toLowerCase()) return (a.cat||'').localeCompare(b.cat||'');
     return (a.name||'').localeCompare(b.name||'');
   });
+
+  // Group by category → company (case-insensitive)
+  const byCategory=[]; const catIdx={};
+  list.forEach(p=>{
+    const catRaw=(p.cat||'Other').trim();
+    const catKey=catRaw.toLowerCase();
+    const coKey=(p.name||'').trim().toLowerCase();
+    const coDisplay=(p.name||'').trim();
+    if(catIdx[catKey]===undefined){ catIdx[catKey]=byCategory.length; byCategory.push({cat:catRaw,companies:[]}); }
+    const grp=byCategory[catIdx[catKey]];
+    const existing=grp.companies.find(c=>c.key===coKey);
+    if(existing) existing.contacts.push(p);
+    else grp.companies.push({name:coDisplay, key:coKey, contacts:[p]});
+  });
+
   const el=document.getElementById('par-list'); el.innerHTML='';
   const showCatHeaders=cF==='All';
-  let lastCat=null;
   let idx=0;
-  list.forEach(p=>{
-    if(showCatHeaders&&p.cat!==lastCat){
-      lastCat=p.cat;
+
+  byCategory.forEach(({cat,companies})=>{
+    if(showCatHeaders){
       const h=document.createElement('div');
-      h.className='rec-cat-header'; h.textContent=p.cat;
+      h.className='rec-cat-header'; h.textContent=cat;
       el.appendChild(h);
     }
-    const div=document.createElement('div');
-    div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
-    div.onclick=()=>openP(p);
-    div.innerHTML=`<div class="pc-av" style="border-radius:14px;font-size:13px">${abbr(p.name)}</div>
-      <div class="pc-info"><div class="pc-name">${p.name}</div><div class="pc-sub">${p.contact}${p.role?' · '+p.role:''}</div></div>
-      <div class="pc-r">
-        ${p.fee?`<span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--gold);font-weight:300">${p.fee}</span>`:''}
-        ${p.country?`<span class="pill p-gh" style="font-size:9px">${p.country}</span>`:''}
-      </div>`;
-    el.appendChild(div);
+    companies.forEach(({name,contacts})=>{
+      const multi=contacts.length>1;
+      const rep=contacts[0]; // representative for avatar/fee/country
+      const country=contacts.map(c=>c.country).find(Boolean)||'';
+      const fee=contacts.map(c=>c.fee).find(Boolean)||'';
+      const div=document.createElement('div');
+      div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
+      if(!multi) div.onclick=()=>openP(rep);
+
+      div.innerHTML=`<div class="pc-av" style="border-radius:14px;font-size:13px">${abbr(name)}</div>
+        <div class="pc-info" style="align-items:flex-start">
+          <div class="pc-name">${name}</div>
+          <div class="pc-contacts"></div>
+        </div>
+        <div class="pc-r" style="align-self:flex-start;margin-top:2px">
+          ${fee?`<span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--gold);font-weight:300">${fee}</span>`:''}
+          ${country?`<span class="pill p-gh" style="font-size:9px">${country}</span>`:''}
+        </div>`;
+      const contactsEl=div.querySelector('.pc-contacts');
+      contacts.forEach((p,i)=>{
+        const row=document.createElement('div');
+        row.className='rec-contact-row'+(multi?' rec-contact-clickable':'')+(i>0?' rec-contact-divider':'');
+        row.textContent=[p.contact,p.role].filter(Boolean).join(' · ')||'';
+        if(multi) row.addEventListener('click',e=>{e.stopPropagation();openP(p);});
+        contactsEl.appendChild(row);
+      });
+      el.appendChild(div);
+    });
   });
 }
 
@@ -2315,6 +2347,10 @@ function setRecCat(el,val){
   rRecs();
 }
 
+function openPartnerById(id){
+  const p=PARTNERS.find(x=>x.id==id);
+  if(p) openP(p);
+}
 function openRolodexEntry(id,isPartner){
   if(isPartner){ const p=PARTNERS.find(x=>x.id===id); if(p) openP(p); }
   else openEditRec(id);
