@@ -55,12 +55,34 @@ let camCompletions = new Set(); // 'type:id' keys
 let openCampaignId = null;
 let addCamTab='clients';
 let CLIENT_ACTIVITIES=[];
+let ALL_ACTIVITIES=[]; // global activity log — single source of truth for contact timers
 let currentActivityClientId=null;
 let CLIENT_DEAL_TASKS={}; // keyed by clientId → array of due/overdue deal tasks
 
 // ── HELPERS ───────────────────────────────────────────────────────
 const ini = n => n.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
 const daysSince = d => d ? Math.floor((TODAY - new Date(d))/86400000) : 9999;
+
+// ── ACTIVITY SOURCE OF TRUTH ──────────────────────────────────────
+// Computes last contact dates live from ALL_ACTIVITIES.
+// meetings count as calls. Call this after any activity change.
+function computeClientDates(clientId){
+  const acts=ALL_ACTIVITIES.filter(a=>a.client_id==clientId);
+  const waDate=acts.filter(a=>a.type==='whatsapp').map(a=>a.occurred_at).sort().reverse()[0]||null;
+  const callDate=acts.filter(a=>a.type==='call'||a.type==='meeting').map(a=>a.occurred_at).sort().reverse()[0]||null;
+  return {
+    wa: waDate?waDate.split('T')[0]:null,
+    call: callDate?callDate.split('T')[0]:null,
+  };
+}
+// Push a new activity into ALL_ACTIVITIES and patch the client object in memory.
+function applyActivity(clientId, type, isoStr){
+  ALL_ACTIVITIES.push({client_id:clientId, type, occurred_at:isoStr});
+  const c=CLIENTS.find(x=>x.id==clientId); if(!c) return;
+  const dates=computeClientDates(clientId);
+  if(type==='whatsapp') c.wa=dates.wa;
+  if(type==='call'||type==='meeting') c.call=dates.call;
+}
 const fm = v => v>=1e6?'$'+(v/1e6).toFixed(1)+'m':v>=1e3?'$'+(v/1e3).toFixed(0)+'k':'$'+v.toLocaleString();
 const CURRENCY_SYM={GBP:'£',USD:'$',EUR:'€',AED:'AED '};
 function fmCur(v,cur){const s=CURRENCY_SYM[cur||'GBP']||((cur||'GBP')+' ');return v>=1e6?s+(v/1e6).toFixed(1)+'m':v>=1e3?s+(v/1e3).toFixed(1).replace(/\.0$/,'')+'k':s+v.toLocaleString();}
@@ -98,7 +120,7 @@ function showToast(msg){ const t=document.getElementById('toast'); t.textContent
 async function loadAll(){
   const today = new Date().toISOString().split('T')[0];
 
-  const [cR, pR, dR, camR, recR, taskR, mtgR] = await Promise.all([
+  const [cR, pR, dR, camR, recR, taskR, mtgR, actR] = await Promise.all([
     SB.from('clients').select('*').order('sort_order'),
     SB.from('partners').select('*').order('sort_order'),
     SB.from('deals').select('*').order('created_at'),
@@ -106,7 +128,11 @@ async function loadAll(){
     SB.from('recommendations').select('*').order('category').order('sort_order'),
     SB.from('task_completions').select('task_key,reset_date'),
     SB.from('client_meetings').select('*').eq('done',false).order('due_date'),
+    SB.from('client_activities').select('client_id,type,occurred_at'),
   ]);
+
+  // Build global activity log — single source of truth for contact timers
+  ALL_ACTIVITIES = actR.data||[];
 
   CLIENTS   = (cR.data||[]).map(normaliseClient);
   PARTNERS  = (pR.data||[]).map(normalisePartner);
@@ -114,6 +140,14 @@ async function loadAll(){
   CAMPAIGNS = (camR.data||[]).map(normaliseCampaign);
   RECS      = recR.data||[];
   MEETINGS  = (mtgR.data||[]);
+
+  // Override last_wa / last_call on every client from the activity log.
+  // This means editing client_activities in Supabase instantly reflects here.
+  CLIENTS.forEach(c=>{
+    const dates=computeClientDates(c.id);
+    if(dates.wa) c.wa=dates.wa;
+    if(dates.call) c.call=dates.call;
+  });
 
   // Task done state — only keep if reset_date is today
   doneTasks = new Set(
@@ -611,10 +645,11 @@ async function saveSnoozeCadence(){
   const dueMs=new Date(chosenDate).getTime();
   const newLastMs=dueMs-(cadenceDays*86400000);
   const newLastDate=new Date(newLastMs).toISOString().split('T')[0];
-  const field=type==='call'?'last_call':'last_wa';
-  const {error}=await SB.from('clients').update({[field]:newLastDate}).eq('id',clientId);
+  // Insert a backdated activity so the source of truth (client_activities) is correct
+  const actType=type==='call'?'call':'whatsapp';
+  const {error}=await SB.from('client_activities').insert({client_id:clientId,type:actType,occurred_at:new Date(newLastMs).toISOString()});
   if(error){ showToast('Could not reschedule'); return; }
-  if(type==='call') c.call=newLastDate; else c.wa=newLastDate;
+  applyActivity(clientId,actType,new Date(newLastMs).toISOString());
   closeModal('modal-snooze-cadence');
   _snoozeCadence=null;
   rHome();
@@ -665,27 +700,24 @@ async function tick(id, el, e){
     el.classList.add('on');
     const card=el.parentElement;
     await SB.from('task_completions').upsert({task_key:id,reset_date:today},{onConflict:'task_key'});
-    // Auto-log contact for cadence tasks so cadence clock resets permanently
+    // Log contact activity — client_activities is the source of truth; applyActivity patches c.wa/c.call
+    const now=new Date().toISOString();
     if(id.startsWith('wa-')){
       const cid=id.slice(3);
-      const c=CLIENTS.find(x=>x.id===cid);
-      if(c){ await SB.from('clients').update({last_wa:today}).eq('id',cid); c.wa=today;
-        await SB.from('client_activities').insert({client_id:cid,type:'whatsapp',occurred_at:new Date().toISOString()}); }
+      await SB.from('client_activities').insert({client_id:cid,type:'whatsapp',occurred_at:now});
+      applyActivity(cid,'whatsapp',now);
     } else if(id.startsWith('cl-')){
       const cid=id.slice(3);
-      const c=CLIENTS.find(x=>x.id===cid);
-      if(c){ await SB.from('clients').update({last_call:today}).eq('id',cid); c.call=today;
-        await SB.from('client_activities').insert({client_id:cid,type:'call',occurred_at:new Date().toISOString()}); }
+      await SB.from('client_activities').insert({client_id:cid,type:'call',occurred_at:now});
+      applyActivity(cid,'call',now);
     } else if(id.startsWith('mtg-')){
       const mid=id.slice(4);
       const m=MEETINGS.find(x=>x.id===mid)||null;
       await SB.from('client_meetings').update({done:true}).eq('id',mid);
       MEETINGS=MEETINGS.filter(x=>x.id!==mid);
       if(m?.client_id){
-        await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:new Date().toISOString()});
-        const mtgToday=new Date().toISOString().split('T')[0];
-        await SB.from('clients').update({last_call:mtgToday}).eq('id',m.client_id);
-        const mc=CLIENTS.find(x=>x.id==m.client_id); if(mc) mc.call=mtgToday;
+        await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:now});
+        applyActivity(m.client_id,'meeting',now);
       }
     }
     // Update ring counts without re-rendering list
@@ -1048,10 +1080,9 @@ async function tickVirtualMtg(mtgId, type, label, colorClass, el){
   await SB.from('client_meetings').update({done:true}).eq('id',mtgId);
   MEETINGS=MEETINGS.filter(x=>x.id!==mtgId);
   if(m?.client_id){
-    await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:new Date().toISOString()});
-    const vtmToday=new Date().toISOString().split('T')[0];
-    await SB.from('clients').update({last_call:vtmToday}).eq('id',m.client_id);
-    const vtmc=CLIENTS.find(x=>x.id==m.client_id); if(vtmc) vtmc.call=vtmToday;
+    const now=new Date().toISOString();
+    await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:now});
+    applyActivity(m.client_id,'meeting',now);
   }
   rHome();
   const mtgDue=MEETINGS.filter(x=>Math.floor((new Date(x.due_date)-TODAY)/86400000)<=7);
@@ -2035,46 +2066,33 @@ async function loadClientDealTasks(clientId){
 }
 
 // ── LOG CALL / WA / MEETING ───────────────────────────────────────
-async function logCall(c){
+// client_activities is the single source of truth. applyActivity keeps
+// the in-memory CLIENTS array in sync. No direct last_call/last_wa writes.
+async function _logActivity(c, type, toast){
   if(!c) return;
-  const now=new Date();
-  const today=now.toISOString().split('T')[0];
-  const {error}=await SB.from('clients').update({last_call:today}).eq('id',c.id);
-  if(error) return;
-  c.call=today;
-  const {data:actData,error:actErr}=await SB.from('client_activities').insert({client_id:c.id,type:'call',occurred_at:now.toISOString()}).select().single();
-  if(actErr){ console.error('client_activities insert error:',actErr); }
+  const now=new Date().toISOString();
+  const {data:actData,error:actErr}=await SB.from('client_activities').insert({client_id:c.id,type,occurred_at:now}).select().single();
+  if(actErr){ console.error('client_activities insert error:',actErr); return; }
+  applyActivity(c.id,type,now);
   if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
-  const profBodyCall=document.getElementById('ps-client-body');
-  if(profBodyCall?.dataset.clientId===c.id) openC(c);
+  return actData;
+}
+async function logCall(c){
+  await _logActivity(c,'call','Call logged ✓');
+  const profBody=document.getElementById('ps-client-body');
+  if(profBody?.dataset.clientId==c.id) openC(c);
   rHome(); if(curTab==='clients') rClients(); showToast('Call logged ✓');
 }
 async function logWa(c){
-  if(!c) return;
-  const now=new Date();
-  const today=now.toISOString().split('T')[0];
-  const {error}=await SB.from('clients').update({last_wa:today}).eq('id',c.id);
-  if(error) return;
-  c.wa=today;
-  const {data:actData,error:actErr}=await SB.from('client_activities').insert({client_id:c.id,type:'whatsapp',occurred_at:now.toISOString()}).select().single();
-  if(actErr){ console.error('client_activities insert error:',actErr); }
-  if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
-  const tlInner=document.getElementById('atl-inner');
-  if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
+  await _logActivity(c,'whatsapp','WhatsApp logged ✓');
   const profBody=document.getElementById('ps-client-body');
-  if(profBody?.dataset.clientId===c.id) openC(c);
+  if(profBody?.dataset.clientId==c.id) openC(c);
   rHome(); if(curTab==='clients') rClients(); showToast('WhatsApp logged ✓');
 }
 async function logMeeting(c){
-  if(!c) return;
-  const now=new Date();
-  const {data:actData,error:actErr}=await SB.from('client_activities').insert({client_id:c.id,type:'meeting',occurred_at:now.toISOString()}).select().single();
-  if(actErr){ console.error('client_activities insert error:',actErr); return; }
-  if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
-  const tlInner=document.getElementById('atl-inner');
-  if(tlInner) tlInner.innerHTML=renderActivityTimeline(c.id);
+  await _logActivity(c,'meeting','Meeting logged ✓');
   showToast('Meeting logged ✓');
 }
 
@@ -2199,12 +2217,10 @@ async function tickFollowUpMeeting(clientId, mtgId, rowEl){
   rowEl.style.transition='opacity 0.3s'; rowEl.style.opacity='0';
   await SB.from('client_meetings').update({done:true}).eq('id',mtgId);
   MEETINGS=MEETINGS.filter(x=>x.id!==mtgId);
-  const now=new Date();
-  const fmToday=now.toISOString().split('T')[0];
-  const {data:actData}=await SB.from('client_activities').insert({client_id:clientId,type:'meeting',occurred_at:now.toISOString()}).select().single();
+  const now=new Date().toISOString();
+  const {data:actData}=await SB.from('client_activities').insert({client_id:clientId,type:'meeting',occurred_at:now}).select().single();
+  applyActivity(clientId,'meeting',now);
   if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
-  await SB.from('clients').update({last_call:fmToday}).eq('id',clientId);
-  const fmc=CLIENTS.find(x=>x.id==clientId); if(fmc) fmc.call=fmToday;
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(clientId);
   rHome();
