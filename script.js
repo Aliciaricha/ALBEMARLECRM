@@ -2289,7 +2289,7 @@ function rPartners(){
       const contactsEl=div.querySelector('.pc-contacts');
       contacts.forEach((p,i)=>{
         const row=document.createElement('div');
-        row.className='rec-contact-row'+(multi?' rec-contact-clickable':'')+(i>0?' rec-contact-divider':'');
+        row.className='pc-sub'+(multi?' rec-contact-clickable':'')+(i>0?' rec-contact-divider':'');
         row.textContent=[p.contact,p.role].filter(Boolean).join(' · ')||'';
         if(multi) row.addEventListener('click',e=>{e.stopPropagation();openP(p);});
         contactsEl.appendChild(row);
