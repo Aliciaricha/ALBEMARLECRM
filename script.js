@@ -681,7 +681,12 @@ async function tick(id, el, e){
       const m=MEETINGS.find(x=>x.id===mid)||null;
       await SB.from('client_meetings').update({done:true}).eq('id',mid);
       MEETINGS=MEETINGS.filter(x=>x.id!==mid);
-      if(m?.client_id) await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:new Date().toISOString()});
+      if(m?.client_id){
+        await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:new Date().toISOString()});
+        const mtgToday=new Date().toISOString().split('T')[0];
+        await SB.from('clients').update({last_call:mtgToday}).eq('id',m.client_id);
+        const mc=CLIENTS.find(x=>x.id==m.client_id); if(mc) mc.call=mtgToday;
+      }
     }
     // Update ring counts without re-rendering list
     const tasks=mkTasks(), tot=tasks.length+(homeDealTasks?.length||0)+doneDealTasksToday, nd=doneTasks.size+doneDealTasksToday;
@@ -1042,7 +1047,12 @@ async function tickVirtualMtg(mtgId, type, label, colorClass, el){
   const m=MEETINGS.find(x=>x.id===mtgId);
   await SB.from('client_meetings').update({done:true}).eq('id',mtgId);
   MEETINGS=MEETINGS.filter(x=>x.id!==mtgId);
-  if(m?.client_id) await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:new Date().toISOString()});
+  if(m?.client_id){
+    await SB.from('client_activities').insert({client_id:m.client_id,type:'meeting',occurred_at:new Date().toISOString()});
+    const vtmToday=new Date().toISOString().split('T')[0];
+    await SB.from('clients').update({last_call:vtmToday}).eq('id',m.client_id);
+    const vtmc=CLIENTS.find(x=>x.id==m.client_id); if(vtmc) vtmc.call=vtmToday;
+  }
   rHome();
   const mtgDue=MEETINGS.filter(x=>Math.floor((new Date(x.due_date)-TODAY)/86400000)<=7);
   setTimeout(()=>renderVirtualCampaignProfile(type,label,colorClass,mtgDue),500);
@@ -2190,8 +2200,11 @@ async function tickFollowUpMeeting(clientId, mtgId, rowEl){
   await SB.from('client_meetings').update({done:true}).eq('id',mtgId);
   MEETINGS=MEETINGS.filter(x=>x.id!==mtgId);
   const now=new Date();
+  const fmToday=now.toISOString().split('T')[0];
   const {data:actData}=await SB.from('client_activities').insert({client_id:clientId,type:'meeting',occurred_at:now.toISOString()}).select().single();
   if(actData){ CLIENT_ACTIVITIES=[actData,...CLIENT_ACTIVITIES].sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at)); }
+  await SB.from('clients').update({last_call:fmToday}).eq('id',clientId);
+  const fmc=CLIENTS.find(x=>x.id==clientId); if(fmc) fmc.call=fmToday;
   const tlInner=document.getElementById('atl-inner');
   if(tlInner) tlInner.innerHTML=renderActivityTimeline(clientId);
   rHome();
