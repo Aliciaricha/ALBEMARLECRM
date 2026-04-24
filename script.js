@@ -50,9 +50,11 @@ let editRecId=null;
 let homeTab='deals', homeDealTasks=null;
 let doneDealTasksToday = 0;
 let homeMode='focus'; // 'focus' = due/overdue only; 'all' = everything + completed
-let doneHomeDealTasks=[]; // deal tasks completed this session, for undo in ALL mode
+let doneHomeDealTasks=[]; // deal tasks completed this session, for immediate undo in ALL mode
+let homeDoneDealTasks=null; // DB-loaded completed deal tasks for ALL mode
 function switchHomeMode(mode){
   homeMode=mode;
+  if(mode==='all') homeDoneDealTasks=null; // force reload when entering ALL
   rHome();
 }
 let addingCampaignId=null;
@@ -521,25 +523,34 @@ async function rHome(){
     });
   });
 
-  // ALL mode: show deal tasks completed this session with undo
-  if(homeMode==='all' && doneHomeDealTasks.length){
-    const doneHdr=document.createElement('div');
-    doneHdr.className='task-group-hdr'; doneHdr.textContent='Completed';
-    list.appendChild(doneHdr);
-    const CHK_SVG='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
-    const DEAL_ICON='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
-    doneHomeDealTasks.forEach((t,i)=>{
-      const deal=DEALS.find(d=>d.id===t.deal_id);
-      const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
-      const act=client?`${t.title} \u2014 ${client.name}`:t.title;
-      const el=document.createElement('div');
-      el.className='tc done a'; el.style.animationDelay=(i*0.04)+'s'; el.style.opacity='0.45';
-      el.innerHTML=`<div class="tc-av deal-tc-av">${DEAL_ICON}</div>
-        <div class="tc-body"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
-        <div class="chk on">${CHK_SVG}</div>`;
-      el.querySelector('.chk').onclick=(ev)=>{ev.stopPropagation(); unTickDealTask(t.id);};
-      list.appendChild(el);
-    });
+  // ALL mode: show completed deal tasks (session + DB) with undo
+  if(homeMode==='all'){
+    if(homeDoneDealTasks===null){
+      const {data}=await SB.from('deal_tasks').select('*').eq('done',true).order('due_date',{ascending:false}).limit(100);
+      homeDoneDealTasks=data||[];
+    }
+    // Merge session completions + DB completions, deduplicate
+    const seenIds=new Set(doneHomeDealTasks.map(t=>t.id));
+    const allDone=[...doneHomeDealTasks, ...(homeDoneDealTasks).filter(t=>!seenIds.has(t.id))];
+    if(allDone.length){
+      const doneHdr=document.createElement('div');
+      doneHdr.className='task-group-hdr'; doneHdr.textContent='Completed';
+      list.appendChild(doneHdr);
+      const CHK_SVG='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      const DEAL_ICON='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+      allDone.forEach((t,i)=>{
+        const deal=DEALS.find(d=>d.id===t.deal_id);
+        const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
+        const act=client?`${t.title} \u2014 ${client.name}`:t.title;
+        const el=document.createElement('div');
+        el.className='tc done a'; el.style.animationDelay=(i*0.04)+'s'; el.style.opacity='0.45';
+        el.innerHTML=`<div class="tc-av deal-tc-av">${DEAL_ICON}</div>
+          <div class="tc-body"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
+          <div class="chk on">${CHK_SVG}</div>`;
+        el.querySelector('.chk').onclick=(ev)=>{ev.stopPropagation(); unTickDealTask(t.id);};
+        list.appendChild(el);
+      });
+    }
   }
 }
 
@@ -691,12 +702,16 @@ async function saveSnoozeCadence(){
 }
 
 async function unTickDealTask(id){
-  const task=doneHomeDealTasks.find(t=>t.id===id); if(!task) return;
+  const task=doneHomeDealTasks.find(t=>t.id===id)||(homeDoneDealTasks||[]).find(t=>t.id===id);
+  if(!task) return;
   const {error}=await SB.from('deal_tasks').update({done:false}).eq('id',id);
   if(error){ showToast('Could not undo'); return; }
   doneHomeDealTasks=doneHomeDealTasks.filter(t=>t.id!==id);
-  homeDealTasks=[...(homeDealTasks||[]),task].sort((a,b)=>new Date(a.due_date)-new Date(b.due_date));
-  doneDealTasksToday=Math.max(0,doneDealTasksToday-1);
+  if(homeDoneDealTasks) homeDoneDealTasks=homeDoneDealTasks.filter(t=>t.id!==id);
+  if(task.due_date){
+    homeDealTasks=[...(homeDealTasks||[]),task].sort((a,b)=>new Date(a.due_date)-new Date(b.due_date));
+    doneDealTasksToday=Math.max(0,doneDealTasksToday-1);
+  }
   rHome();
 }
 
@@ -847,10 +862,17 @@ function switchDealTab(tab){
 async function renderDealTasksTimeline(){
   const wrap=document.getElementById('deal-tasks-timeline');
   wrap.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
-  const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false});
-  const tasks=data||[];
+  const [{data:undoneData},{data:doneData}]=await Promise.all([
+    SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false}),
+    SB.from('deal_tasks').select('*').eq('done',true).order('due_date',{ascending:false}).limit(100),
+  ]);
+  const tasks=undoneData||[];
+  const doneTasks2=doneData||[];
   wrap.innerHTML='';
-  if(!tasks.length){ wrap.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding tasks.</div>'; return; }
+  if(!tasks.length && !doneTasks2.length){ wrap.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No tasks.</div>'; return; }
+  if(!tasks.length && doneTasks2.length){
+    // skip to completed section below
+  }
   const today=new Date(); today.setHours(0,0,0,0);
   const buckets=new Map();
   tasks.forEach(t=>{
@@ -895,6 +917,39 @@ async function renderDealTasksTimeline(){
     });
     wrap.appendChild(card);
   });
+
+  // Completed section
+  if(doneTasks2.length){
+    const doneHdr=document.createElement('div');
+    doneHdr.className='rec-cat-header'; doneHdr.style.cssText='opacity:0.5;margin-top:8px';
+    doneHdr.textContent='Completed';
+    wrap.appendChild(doneHdr);
+    const doneCard=document.createElement('div');
+    doneCard.className='acts';
+    doneTasks2.forEach(t=>{
+      const deal=DEALS.find(d=>d.id===t.deal_id);
+      const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
+      const sub=[client?.name,deal?.pt].filter(Boolean).join(' · ');
+      const row=document.createElement('div');
+      row.className='act'; row.style.cssText='padding:10px 14px;gap:12px;opacity:0.45;';
+      row.innerHTML=`
+        <div style="width:6px;height:6px;border-radius:50%;background:var(--gold);opacity:0.5;flex-shrink:0;margin-top:2px"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:line-through">${t.title}</div>
+          ${sub?`<div style="font-size:11px;color:var(--t3);margin-top:2px">${sub}</div>`:''}
+        </div>
+        <div class="chk on" onclick="event.stopPropagation();unTickDealTaskTimeline('${t.id}',this.closest('.act'))"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
+      doneCard.appendChild(row);
+    });
+    wrap.appendChild(doneCard);
+  }
+}
+
+async function unTickDealTaskTimeline(id, row){
+  row.style.transition='opacity 0.25s'; row.style.opacity='0';
+  const {error}=await SB.from('deal_tasks').update({done:false}).eq('id',id);
+  if(error){ showToast('Could not undo'); row.style.opacity='0.45'; return; }
+  setTimeout(()=>renderDealTasksTimeline(), 260);
 }
 
 async function tickDealTaskTimeline(id,card){
@@ -2621,7 +2676,7 @@ function go(tab){
     const btn=document.getElementById('tab-'+t);
     if(btn) btn.classList.toggle('active',t===tab);
   });
-  if(tab==='home'){ homeDealTasks=null; doneDealTasksToday=0; doneHomeDealTasks=[]; rHome(); }
+  if(tab==='home'){ homeDealTasks=null; doneDealTasksToday=0; doneHomeDealTasks=[]; homeDoneDealTasks=null; rHome(); }
   else if(tab==='deals') rDeals();
   else if(tab==='campaigns') rCampaigns();
   else if(tab==='clients') rClients();
