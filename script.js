@@ -790,6 +790,7 @@ async function rDeals(){
 }
 
 let dealTab='deals';
+let dealTaskMode='focus'; // 'focus' = due soon only, 'complete' = all tasks
 function switchDealTab(tab){
   dealTab=tab;
   document.querySelectorAll('#s-deals .home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
@@ -797,19 +798,41 @@ function switchDealTab(tab){
   document.getElementById('deal-tasks-timeline').style.display=tab==='tasks'?'':'none';
   if(tab==='tasks') renderDealTasksTimeline();
 }
+function switchDealTaskMode(mode){
+  dealTaskMode=mode;
+  renderDealTasksTimeline();
+}
 
 async function renderDealTasksTimeline(){
-  const wrap=document.getElementById('deal-tasks-timeline'); wrap.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
+  const wrap=document.getElementById('deal-tasks-timeline');
+  wrap.innerHTML=`
+    <div class="home-toggle" style="margin:0 0 14px">
+      <div class="home-toggle-btn${dealTaskMode==='focus'?' on':''}" onclick="switchDealTaskMode('focus')">Focus</div>
+      <div class="home-toggle-btn${dealTaskMode==='complete'?' on':''}" onclick="switchDealTaskMode('complete')">Complete</div>
+    </div>
+    <div style="padding:16px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>`;
   const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false});
   const tasks=data||[];
-  if(!tasks.length){ wrap.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding tasks.</div>'; return; }
+  // Re-render toggle with correct state now that we have data
+  wrap.innerHTML=`
+    <div class="home-toggle" style="margin:0 0 14px">
+      <div class="home-toggle-btn${dealTaskMode==='focus'?' on':''}" onclick="switchDealTaskMode('focus')">Focus</div>
+      <div class="home-toggle-btn${dealTaskMode==='complete'?' on':''}" onclick="switchDealTaskMode('complete')">Complete</div>
+    </div>`;
+  if(!tasks.length){
+    wrap.insertAdjacentHTML('beforeend','<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding tasks.</div>');
+    return;
+  }
   const today=new Date(); today.setHours(0,0,0,0);
   const buckets=new Map();
   tasks.forEach(t=>{
-    if(!t.due_date){ const k='No Date'; if(!buckets.has(k)) buckets.set(k,{label:'No Date',color:'',items:[]}); buckets.get(k).items.push(t); return; }
+    if(!t.due_date){
+      if(dealTaskMode==='focus') return; // no date = not actionable yet
+      const k='No Date'; if(!buckets.has(k)) buckets.set(k,{label:'No Date',color:'',items:[]}); buckets.get(k).items.push(t); return;
+    }
     const d=new Date(t.due_date); d.setHours(0,0,0,0);
     const diff=Math.round((d-today)/86400000);
-    if(diff>=3) return; // hide tasks due 3+ days away
+    if(dealTaskMode==='focus'&&diff>=3) return; // focus: only due/overdue within 3 days
     let label,color='';
     if(diff<0){label='Overdue';color='var(--red)';}
     else if(diff===0){label='Today';color='var(--gold)';}
@@ -818,7 +841,10 @@ async function renderDealTasksTimeline(){
     if(!buckets.has(label)) buckets.set(label,{label,color,items:[]});
     buckets.get(label).items.push(t);
   });
-  wrap.innerHTML='';
+  if(!buckets.size){
+    wrap.insertAdjacentHTML('beforeend',`<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">${dealTaskMode==='focus'?'No tasks due right now.':'No outstanding tasks.'}</div>`);
+    return;
+  }
   buckets.forEach(({label,color,items})=>{
     const hdr=document.createElement('div');
     hdr.className='rec-cat-header';
