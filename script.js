@@ -1869,6 +1869,18 @@ async function saveEditActivity(){
   const notes=document.getElementById('edit-act-notes').value.trim();
   if(!dateVal){ showToast('Please set a date'); return; }
   const newOccurred=new Date(dateVal+'T12:00:00').toISOString();
+  // Synthetic campaign entries live in campaign_completions, not client_activities
+  if(act._synthetic && act._camId){
+    const {error}=await SB.from('campaign_completions').update({created_at:newOccurred}).eq('campaign_id',act._camId).eq('contact_id',editActivityClientId).eq('contact_type','client');
+    if(error){ showToast('Could not save: '+error.message); return; }
+    act.occurred_at=newOccurred;
+    CLIENT_ACTIVITIES.sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at));
+    closeModal('modal-edit-activity');
+    const tlInner=document.getElementById('atl-inner');
+    if(tlInner) tlInner.innerHTML=renderActivityTimeline(editActivityClientId);
+    showToast('Activity updated ✓');
+    return;
+  }
   const {error}=await SB.from('client_activities').update({occurred_at:newOccurred, notes:notes||null}).eq('id',editActivityId);
   if(error){ showToast('Could not save: '+error.message); return; }
   // Update in-memory
@@ -1954,11 +1966,16 @@ async function openC(c, _skipActivityLoad=false){
   const rel=REL_CADENCES[c.relationship];
   const wa=daysSince(c.wa), cl=daysSince(c.call);
 
-  // ── Last Contact: most recent of WA or Call ──────────────────────
+  // ── Last Contact: most recent of WA or Call/Meeting ──────────────
   let lastContactType='', lastContactDays=9999;
   if(wa!==9999||cl!==9999){
     if(wa<=cl){ lastContactType='WhatsApp'; lastContactDays=wa; }
-    else       { lastContactType='Call';     lastContactDays=cl; }
+    else {
+      // Distinguish between a logged call and a meeting
+      const lastCallAct=ALL_ACTIVITIES.filter(a=>a.client_id===c.id&&(a.type==='call'||a.type==='meeting')).sort((a,b)=>new Date(b.occurred_at)-new Date(a.occurred_at))[0];
+      lastContactType=lastCallAct?.type==='meeting'?'Meeting':'Call';
+      lastContactDays=cl;
+    }
   }
   const lastContactStr = lastContactDays===9999 ? 'Never contacted' :
     lastContactDays===0 ? `${lastContactType} · Today` :
