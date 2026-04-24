@@ -809,6 +809,7 @@ async function renderDealTasksTimeline(){
     if(!t.due_date){ const k='No Date'; if(!buckets.has(k)) buckets.set(k,{label:'No Date',color:'',items:[]}); buckets.get(k).items.push(t); return; }
     const d=new Date(t.due_date); d.setHours(0,0,0,0);
     const diff=Math.round((d-today)/86400000);
+    if(diff>=3) return; // hide tasks due 3+ days away
     let label,color='';
     if(diff<0){label='Overdue';color='var(--red)';}
     else if(diff===0){label='Today';color='var(--gold)';}
@@ -850,9 +851,27 @@ async function renderDealTasksTimeline(){
 }
 
 async function tickDealTaskTimeline(id,card){
-  await SB.from('deal_tasks').update({done:true}).eq('id',id);
-  card.style.transition='opacity 0.3s'; card.style.opacity='0';
-  setTimeout(()=>{ card.remove(); },300);
+  // Immediate visual: check on, strikethrough, dim
+  const chkEl=card.querySelector('.chk');
+  const titleEl=card.querySelector('[style*="font-weight:600"]');
+  if(chkEl) chkEl.classList.add('on');
+  if(titleEl){ titleEl.style.textDecoration='line-through'; titleEl.style.color='var(--t3)'; }
+  card.style.opacity='0.38';
+
+  // FLIP: record position before move, append to bottom, animate from old position
+  const wrap=document.getElementById('deal-tasks-timeline');
+  const first=card.getBoundingClientRect();
+  wrap.appendChild(card);
+  const last=card.getBoundingClientRect();
+  const dy=first.top-last.top;
+  card.style.transition='none';
+  card.style.transform=`translateY(${dy}px)`;
+  card.getBoundingClientRect(); // force reflow
+  card.style.transition='transform 0.42s cubic-bezier(0.4,0,0.2,1)';
+  card.style.transform='translateY(0)';
+
+  // DB update — non-blocking, disappears on next render when tab is revisited
+  SB.from('deal_tasks').update({done:true}).eq('id',id);
 }
 
 // ── CAMPAIGNS ─────────────────────────────────────────────────────
@@ -1602,7 +1621,7 @@ async function loadClientActivities(clientId, client){
   // Backfill: if no call/wa activities exist yet, seed from last_call/last_wa
   // (handles history logged before the timeline existed)
   if(client){
-    const hasCall=CLIENT_ACTIVITIES.some(a=>a.type==='call');
+    const hasCall=CLIENT_ACTIVITIES.some(a=>a.type==='call'||a.type==='meeting');
     const hasWa=CLIENT_ACTIVITIES.some(a=>a.type==='whatsapp');
     if(!hasCall && client.call){
       const {data:bf}=await SB.from('client_activities').insert({client_id:clientId,type:'call',occurred_at:new Date(client.call+'T12:00:00').toISOString()}).select().single();
@@ -1628,7 +1647,7 @@ async function loadClientActivities(clientId, client){
   if(client){
     const rWa=CLIENT_ACTIVITIES.filter(a=>a.type==='whatsapp'&&!a._synthetic)[0];
     if(rWa){ const d=new Date(rWa.occurred_at).toISOString().split('T')[0]; if(d!==client.wa){ await SB.from('clients').update({last_wa:d}).eq('id',clientId); client.wa=d; } }
-    const rCall=CLIENT_ACTIVITIES.filter(a=>a.type==='call'&&!a._synthetic)[0];
+    const rCall=CLIENT_ACTIVITIES.filter(a=>(a.type==='call'||a.type==='meeting')&&!a._synthetic)[0];
     if(rCall){ const d=new Date(rCall.occurred_at).toISOString().split('T')[0]; if(d!==client.call){ await SB.from('clients').update({last_call:d}).eq('id',clientId); client.call=d; } }
   }
 }
@@ -1799,9 +1818,9 @@ function renderActivityTimeline(clientId){
         <div class="atl-date">${fmtActivityDate(a.occurred_at)}</div>
         ${a.notes&&a.type!=='campaign'?`<div class="atl-notes">${a.notes}</div>`:''}
       </div>
-      ${a.type!=='campaign'?`<div class="atl-edit" onclick="openEditActivity('${a.id}','${clientId}')">
+      <div class="atl-edit" onclick="openEditActivity('${a.id}','${clientId}')">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-      </div>`:''}
+      </div>
     </div>`).join('')}
   </div>`;
 }
@@ -1850,6 +1869,18 @@ async function saveEditActivity(){
 async function deleteActivity(){
   if(!editActivityId) return;
   const act=CLIENT_ACTIVITIES.find(a=>a.id===editActivityId);
+  // Synthetic campaign entries live in campaign_completions, not client_activities
+  if(act?._synthetic && act?._camId){
+    const {error}=await SB.from('campaign_completions').delete().eq('campaign_id',act._camId).eq('contact_id',editActivityClientId).eq('contact_type','client');
+    if(error){ showToast('Could not delete: '+error.message); return; }
+    CLIENT_ACTIVITIES=CLIENT_ACTIVITIES.filter(a=>a.id!==editActivityId);
+    closeModal('modal-edit-activity');
+    const tlInner=document.getElementById('atl-inner');
+    if(tlInner) tlInner.innerHTML=renderActivityTimeline(editActivityClientId);
+    rHome();
+    showToast('Activity deleted');
+    return;
+  }
   const {error}=await SB.from('client_activities').delete().eq('id',editActivityId);
   if(error){ showToast('Could not delete: '+error.message); return; }
   CLIENT_ACTIVITIES=CLIENT_ACTIVITIES.filter(a=>a.id!==editActivityId);
