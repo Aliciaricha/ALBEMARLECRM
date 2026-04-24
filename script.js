@@ -49,6 +49,12 @@ let editingDealId=null;
 let editRecId=null;
 let homeTab='deals', homeDealTasks=null;
 let doneDealTasksToday = 0;
+let homeMode='focus'; // 'focus' = due/overdue only; 'all' = everything + completed
+let doneHomeDealTasks=[]; // deal tasks completed this session, for undo in ALL mode
+function switchHomeMode(mode){
+  homeMode=mode;
+  rHome();
+}
 let addingCampaignId=null;
 let ncam_imageData=null, ecam_imageData=null;
 let camCompletions = new Set(); // 'type:id' keys
@@ -419,6 +425,9 @@ async function rHome(){
 
   const list=document.getElementById('task-list');
 
+  // Update mode toggle visual
+  document.querySelectorAll('#home-mode-toggle .home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.mode===homeMode));
+
   // Load deal tasks if not cached
   if(homeDealTasks===null){
     list.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
@@ -443,7 +452,9 @@ async function rHome(){
     {key:'seasonal', label:'Seasonal Campaigns', items:[]},
   ];
 
-  homeDealTasks.forEach(t=>BUCKETS[0].items.push({isDeal:true, t, urg:dealUrg(t.due_date)}));
+  homeDealTasks
+    .filter(t=>homeMode==='focus'?dealUrg(t.due_date)!=='waiting':true)
+    .forEach(t=>BUCKETS[0].items.push({isDeal:true, t, urg:dealUrg(t.due_date)}));
   netTasks.forEach(t=>{
     const cam=t.camId?CAMPAIGNS.find(c=>c.id===t.camId):null;
     let b;
@@ -488,7 +499,8 @@ async function rHome(){
         const avContent=t.isCam?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>':ini(t.nm);
         el.className=`tc ${t.isCam?'campaign':urg} a`;
         const isDone=doneTasks.has(t.id);
-        if(isDone){ el.style.display='none'; }
+        if(isDone && homeMode==='focus'){ el.style.display='none'; }
+        if(isDone && homeMode==='all'){ el.style.opacity='0.45'; }
         el.innerHTML=`<div class="tc-av ${avClass}">${avContent}</div>
           <div class="tc-body"><div class="tc-act">${t.act}</div><div class="tc-why">${t.why}</div></div>
           <div class="chk ${isDone?'on':''}" onclick="tick('${t.id}',this,event)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
@@ -508,6 +520,27 @@ async function rHome(){
       list.appendChild(el);
     });
   });
+
+  // ALL mode: show deal tasks completed this session with undo
+  if(homeMode==='all' && doneHomeDealTasks.length){
+    const doneHdr=document.createElement('div');
+    doneHdr.className='task-group-hdr'; doneHdr.textContent='Completed';
+    list.appendChild(doneHdr);
+    const CHK_SVG='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    const DEAL_ICON='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+    doneHomeDealTasks.forEach((t,i)=>{
+      const deal=DEALS.find(d=>d.id===t.deal_id);
+      const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
+      const act=client?`${t.title} \u2014 ${client.name}`:t.title;
+      const el=document.createElement('div');
+      el.className='tc done a'; el.style.animationDelay=(i*0.04)+'s'; el.style.opacity='0.45';
+      el.innerHTML=`<div class="tc-av deal-tc-av">${DEAL_ICON}</div>
+        <div class="tc-body"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
+        <div class="chk on">${CHK_SVG}</div>`;
+      el.querySelector('.chk').onclick=(ev)=>{ev.stopPropagation(); unTickDealTask(t.id);};
+      list.appendChild(el);
+    });
+  }
 }
 
 function switchHomeTab(tab){ homeDealTasks=null; rHome(); }
@@ -657,11 +690,24 @@ async function saveSnoozeCadence(){
   showToast('Rescheduled ✓');
 }
 
+async function unTickDealTask(id){
+  const task=doneHomeDealTasks.find(t=>t.id===id); if(!task) return;
+  const {error}=await SB.from('deal_tasks').update({done:false}).eq('id',id);
+  if(error){ showToast('Could not undo'); return; }
+  doneHomeDealTasks=doneHomeDealTasks.filter(t=>t.id!==id);
+  homeDealTasks=[...(homeDealTasks||[]),task].sort((a,b)=>new Date(a.due_date)-new Date(b.due_date));
+  doneDealTasksToday=Math.max(0,doneDealTasksToday-1);
+  rHome();
+}
+
 async function tickDealTask(id,el,e){
   e.stopPropagation();
   el.classList.add('on');
   const card=el.closest('.tc');
   card.classList.add('done');
+  // Store for undo in ALL mode
+  const taskObj=(homeDealTasks||[]).find(t=>t.id===id);
+  if(taskObj && !doneHomeDealTasks.find(t=>t.id===id)) doneHomeDealTasks.push(taskObj);
   await SB.from('deal_tasks').update({done:true}).eq('id',id);
   homeDealTasks=(homeDealTasks||[]).filter(t=>t.id!==id);
   doneDealTasksToday++;
@@ -790,7 +836,6 @@ async function rDeals(){
 }
 
 let dealTab='deals';
-let dealTaskMode='focus'; // 'focus' = due soon only, 'complete' = all tasks
 function switchDealTab(tab){
   dealTab=tab;
   document.querySelectorAll('#s-deals .home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
@@ -798,41 +843,20 @@ function switchDealTab(tab){
   document.getElementById('deal-tasks-timeline').style.display=tab==='tasks'?'':'none';
   if(tab==='tasks') renderDealTasksTimeline();
 }
-function switchDealTaskMode(mode){
-  dealTaskMode=mode;
-  renderDealTasksTimeline();
-}
 
 async function renderDealTasksTimeline(){
   const wrap=document.getElementById('deal-tasks-timeline');
-  wrap.innerHTML=`
-    <div class="home-toggle" style="margin:0 0 14px">
-      <div class="home-toggle-btn${dealTaskMode==='focus'?' on':''}" onclick="switchDealTaskMode('focus')">Focus</div>
-      <div class="home-toggle-btn${dealTaskMode==='complete'?' on':''}" onclick="switchDealTaskMode('complete')">Complete</div>
-    </div>
-    <div style="padding:16px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>`;
+  wrap.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
   const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false});
   const tasks=data||[];
-  // Re-render toggle with correct state now that we have data
-  wrap.innerHTML=`
-    <div class="home-toggle" style="margin:0 0 14px">
-      <div class="home-toggle-btn${dealTaskMode==='focus'?' on':''}" onclick="switchDealTaskMode('focus')">Focus</div>
-      <div class="home-toggle-btn${dealTaskMode==='complete'?' on':''}" onclick="switchDealTaskMode('complete')">Complete</div>
-    </div>`;
-  if(!tasks.length){
-    wrap.insertAdjacentHTML('beforeend','<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding tasks.</div>');
-    return;
-  }
+  wrap.innerHTML='';
+  if(!tasks.length){ wrap.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding tasks.</div>'; return; }
   const today=new Date(); today.setHours(0,0,0,0);
   const buckets=new Map();
   tasks.forEach(t=>{
-    if(!t.due_date){
-      if(dealTaskMode==='focus') return; // no date = not actionable yet
-      const k='No Date'; if(!buckets.has(k)) buckets.set(k,{label:'No Date',color:'',items:[]}); buckets.get(k).items.push(t); return;
-    }
+    if(!t.due_date){ const k='No Date'; if(!buckets.has(k)) buckets.set(k,{label:'No Date',color:'',items:[]}); buckets.get(k).items.push(t); return; }
     const d=new Date(t.due_date); d.setHours(0,0,0,0);
     const diff=Math.round((d-today)/86400000);
-    if(dealTaskMode==='focus'&&diff>=3) return; // focus: only due/overdue within 3 days
     let label,color='';
     if(diff<0){label='Overdue';color='var(--red)';}
     else if(diff===0){label='Today';color='var(--gold)';}
@@ -841,10 +865,7 @@ async function renderDealTasksTimeline(){
     if(!buckets.has(label)) buckets.set(label,{label,color,items:[]});
     buckets.get(label).items.push(t);
   });
-  if(!buckets.size){
-    wrap.insertAdjacentHTML('beforeend',`<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">${dealTaskMode==='focus'?'No tasks due right now.':'No outstanding tasks.'}</div>`);
-    return;
-  }
+  if(!buckets.size){ wrap.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding tasks.</div>'; return; }
   buckets.forEach(({label,color,items})=>{
     const hdr=document.createElement('div');
     hdr.className='rec-cat-header';
@@ -2600,7 +2621,7 @@ function go(tab){
     const btn=document.getElementById('tab-'+t);
     if(btn) btn.classList.toggle('active',t===tab);
   });
-  if(tab==='home'){ homeDealTasks=null; doneDealTasksToday=0; rHome(); }
+  if(tab==='home'){ homeDealTasks=null; doneDealTasksToday=0; doneHomeDealTasks=[]; rHome(); }
   else if(tab==='deals') rDeals();
   else if(tab==='campaigns') rCampaigns();
   else if(tab==='clients') rClients();

@@ -56,6 +56,10 @@
         <div class="qs" onclick="go('campaigns')"><div class="qs-n" id="qs-cam">0</div><div class="qs-l">Campaigns</div></div>
         <div class="qs" onclick="go('partners')"><div class="qs-n" id="qs-par">0</div><div class="qs-l">Partners</div></div>
       </div>
+      <div class="home-toggle" id="home-mode-toggle" style="margin:0 16px 10px">
+        <div class="home-toggle-btn on" data-mode="focus" onclick="switchHomeMode('focus')">Focus</div>
+        <div class="home-toggle-btn" data-mode="all" onclick="switchHomeMode('all')">All</div>
+      </div>
       <div class="tasks" id="task-list"></div>
       <div style="height:24px"></div>
     </div>
