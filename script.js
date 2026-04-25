@@ -573,8 +573,6 @@ async function rHome(){
   }
 }
 
-function switchHomeTab(tab){ homeDealTasks=null; rHome(); }
-
 function dealTaskTimer(dueDate){
   if(!dueDate) return '';
   const today=new Date(); today.setHours(0,0,0,0);
@@ -588,63 +586,6 @@ function dealTaskTimer(dueDate){
   return `<span class="dt-timer dt-late">${over} days overdue</span>`;
 }
 
-async function renderHomeDealTasks(){
-  const list=document.getElementById('task-list');
-  if(homeDealTasks===null){
-    list.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
-    const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false}).limit(5000);
-    homeDealTasks=(data||[]).filter(t=>!!t.due_date);
-  }
-
-  // Ring counts only tasks that are due/overdue (FOCUS view of this tab)
-  const todayNow=new Date(); todayNow.setHours(0,0,0,0);
-  const dueTasks=homeDealTasks.filter(t=>{ const d=new Date(t.due_date); d.setHours(0,0,0,0); return d<=todayNow; });
-  const tot=dueTasks.length+doneDealTasksToday;
-  const nd=doneDealTasksToday;
-  const urg=dueTasks.filter(t=>{ const d=new Date(t.due_date); d.setHours(0,0,0,0); return Math.floor((todayNow-d)/86400000)>3; }).length;
-  updateProgressRing(tot,nd,urg,
-    tot===0?'No deal tasks due today.':nd===tot&&tot>0?'All done — great progress.':`${tot-nd} deal task${tot-nd===1?'':'s'} remaining today`);
-
-  list.innerHTML='';
-  if(!homeDealTasks.length){
-    list.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No deal tasks due.</div>';
-    return;
-  }
-
-  const catMap=new Map();
-  homeDealTasks.forEach(t=>{
-    const deal=DEALS.find(d=>d.id===t.deal_id);
-    const cat=deal?deal.cat:'Other';
-    if(!catMap.has(cat)) catMap.set(cat,[]);
-    catMap.get(cat).push({t,deal});
-  });
-
-  let gi=0;
-  catMap.forEach((items,cat)=>{
-    const hdr=document.createElement('div');
-    hdr.className='task-group-hdr'; hdr.textContent=cat;
-    list.appendChild(hdr);
-    items.forEach(({t,deal})=>{
-      const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
-      const cname=client?client.name:'';
-      const act=cname?`${t.title} \u2014 ${cname}`:t.title;
-      const el=document.createElement('div');
-      el.className='tc normal a'; el.style.animationDelay=(gi++*0.04)+'s';
-      el.innerHTML=`<div class="tc-av deal-tc-av">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        </div>
-        <div class="tc-body" style="cursor:pointer"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
-        <div class="chk">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>`;
-      // Tick
-      el.querySelector('.chk').onclick=(ev)=>tickDealTask(t.id,el.querySelector('.chk'),ev);
-      el.onclick=(ev)=>{ if(ev.target.closest('.chk')) return;
-        openTaskActions(t.id, act, 'deal', {title:t.title, dueDate:t.due_date}, el); };
-      list.appendChild(el);
-    });
-  });
-}
 
 
 let rescheduleTaskId=null;
@@ -667,8 +608,7 @@ async function saveRescheduleTask(){
     if(ct) ct.due_date=newDate;
   });
   closeModal('modal-reschedule-task');
-  homeDealTasks=null; // force reload
-  renderHomeDealTasks();
+  rHome();
   // Refresh follow-ups if a client profile is currently open
   const profBody=document.getElementById('ps-client-body');
   if(profBody?.dataset.clientId) _refreshMeetingFollowUps(profBody.dataset.clientId);
