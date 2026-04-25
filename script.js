@@ -497,10 +497,12 @@ async function rHome(){
         const act=client?`${t.title} \u2014 ${client.name}`:t.title;
         el.innerHTML=`<div class="tc-av deal-tc-av"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
           <div class="tc-body" style="cursor:pointer"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
+          <div class="arc-btn" title="Archive"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg></div>
           <div class="chk"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
         el.querySelector('.chk').onclick=(ev)=>tickDealTask(t.id,el.querySelector('.chk'),ev);
+        el.querySelector('.arc-btn').onclick=(ev)=>archiveTask(t.id,ev);
         el.querySelector('.tc-body').onclick=(ev)=>{ev.stopPropagation();openRescheduleTask(t.id,t.title,t.due_date);};
-        if(deal) el.onclick=(ev)=>{if(ev.target.closest('.chk')||ev.target.closest('.tc-body')) return; openDealModal(deal.clientId,deal.id);};
+        if(deal) el.onclick=(ev)=>{if(ev.target.closest('.chk')||ev.target.closest('.tc-body')||ev.target.closest('.arc-btn')) return; openDealModal(deal.clientId,deal.id);};
       } else {
         const avClass=t.isCam?'cam-av':'';
         const avContent=t.isCam?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>':ini(t.nm);
@@ -508,20 +510,22 @@ async function rHome(){
         const isDone=doneTasks.has(t.id);
         if(isDone && homeMode==='focus'){ el.style.display='none'; }
         if(isDone && homeMode==='all'){ el.style.opacity='0.45'; }
+        const arcSvg='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>';
         el.innerHTML=`<div class="tc-av ${avClass}">${avContent}</div>
           <div class="tc-body"><div class="tc-act">${t.act}</div><div class="tc-why">${t.why}</div></div>
+          <div class="arc-btn" title="Archive" onclick="archiveTask('${t.id}',event)">${arcSvg}</div>
           <div class="chk ${isDone?'on':''}" onclick="tick('${t.id}',this,event)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
         if(t.isCam){
-          el.onclick=(e)=>{ if(e.target.closest('.chk')) return;
+          el.onclick=(e)=>{ if(e.target.closest('.chk')||e.target.closest('.arc-btn')) return;
             const cam=CAMPAIGNS.find(c=>c.id===t.camId);
             if(t.clientObj) openWaSheet(t.clientObj,cam); else openCampaign(cam);
           };
         } else if(t.isMtg){
-          el.onclick=(e)=>{ if(e.target.closest('.chk')) return; openEditMeeting(t.mtgId); };
+          el.onclick=(e)=>{ if(e.target.closest('.chk')||e.target.closest('.arc-btn')) return; openEditMeeting(t.mtgId); };
         } else {
           const isCall=t.id.startsWith('cl-');
           const client=CLIENTS.find(c=>'wa-'+c.id===t.id||'cl-'+c.id===t.id);
-          if(client) el.onclick=(e)=>{ if(e.target.closest('.chk')) return; openSnoozeCadence(client.id,isCall?'call':'wa'); };
+          if(client) el.onclick=(e)=>{ if(e.target.closest('.chk')||e.target.closest('.arc-btn')) return; openSnoozeCadence(client.id,isCall?'call':'wa'); };
         }
       }
       list.appendChild(el);
@@ -804,6 +808,54 @@ async function tick(id, el, e){
       card.style.marginBottom='0';
       setTimeout(()=>card.remove(),450);
     },2000);
+  }
+}
+
+async function archiveTask(id, event){
+  event.stopPropagation();
+  const card=event.currentTarget.closest('.tc');
+  // Animate out immediately
+  if(card){
+    card.style.transition='opacity 0.25s, max-height 0.35s, margin-bottom 0.35s, padding 0.35s';
+    card.style.opacity='0'; card.style.maxHeight='0'; card.style.overflow='hidden';
+    card.style.padding='0'; card.style.marginBottom='0';
+  }
+
+  if(id.startsWith('wa-')||id.startsWith('cl-')){
+    // Skip one cadence cycle: log activity as of now so next due = now + cadenceDays
+    const isCall=id.startsWith('cl-');
+    const clientId=id.slice(3);
+    const actType=isCall?'call':'whatsapp';
+    const now=new Date().toISOString();
+    const {error}=await SB.from('client_activities').insert({client_id:clientId,type:actType,occurred_at:now});
+    if(error){ showToast('Could not archive'); card&&rHome(); return; }
+    applyActivity(clientId,actType,now);
+    setTimeout(()=>rHome(),380);
+    if(curTab==='clients') rClients();
+    showToast('Skipped — rescheduled ✓');
+
+  } else if(id.startsWith('mtg-')){
+    const mtgId=id.slice(4);
+    await SB.from('client_meetings').update({done:true}).eq('id',mtgId);
+    MEETINGS=MEETINGS.filter(x=>x.id!==mtgId);
+    setTimeout(()=>rHome(),380);
+    showToast('Meeting removed ✓');
+
+  } else if(id.startsWith('cam-')){
+    // Archive for today: add to doneTasks + persist to task_completions
+    const today=new Date().toISOString().split('T')[0];
+    doneTasks.add(id);
+    await SB.from('task_completions').upsert({task_key:id,reset_date:today},{onConflict:'task_key'});
+    setTimeout(()=>rHome(),380);
+    showToast('Archived ✓');
+
+  } else {
+    // Deal task: mark done in DB without counting as a completion
+    const {error}=await SB.from('deal_tasks').update({done:true}).eq('id',id);
+    if(error){ showToast('Could not archive'); card&&rHome(); return; }
+    homeDealTasks=(homeDealTasks||[]).filter(t=>t.id!==id);
+    setTimeout(()=>rHome(),380);
+    showToast('Task archived ✓');
   }
 }
 

@@ -99,6 +99,8 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .tc-body { flex: 1; min-width: 0; }
 .tc-act { font-size: 12px; font-weight: 600; color: var(--t1); }
 .tc-why { font-size: 11px; color: var(--t2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arc-btn { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--t3); transition: color 0.15s, background 0.15s; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.arc-btn:active { color: var(--t2); background: rgba(0,0,0,0.06); }
 .chk { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; border: 1.5px solid rgba(138,109,62,0.28); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.18s; background: transparent; }
 .chk.on { background: var(--gold); border-color: var(--gold); }
 .chk svg { opacity: 0; transition: opacity 0.18s; stroke: white; }
