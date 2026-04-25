@@ -144,12 +144,8 @@ async function loadAll(){
   MEETINGS  = (mtgR.data||[]);
   doneTasks = new Set((taskR.data||[]).filter(t=>t.reset_date===today).map(t=>t.task_key));
 
-  // Pre-cache deal tasks so rHome() renders without a second DB round-trip
-  homeDealTasks = (dtR.data||[]).filter(t=>{
-    if(!t.due_date) return false;
-    const d=new Date(t.due_date); d.setHours(0,0,0,0);
-    return d<=todayD;
-  });
+  // Pre-cache all undone deal tasks — FOCUS/ALL filtering happens at render time
+  homeDealTasks = (dtR.data||[]).filter(t=>!!t.due_date);
   homeDealTasksTs = Date.now();
 
   // Show the app and render immediately
@@ -452,12 +448,7 @@ async function rHome(){
   if(homeDealTasks===null){
     list.innerHTML=`<div class="task-group-hdr" style="opacity:0.35">Tasks</div>${[1,2,3].map(()=>`<div class="sk-card"><div class="sk-line" style="width:55%;margin-bottom:8px"></div><div class="sk-line" style="width:30%"></div></div>`).join('')}`;
     const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false}).limit(5000);
-    const todayD=new Date(); todayD.setHours(0,0,0,0);
-    homeDealTasks=(data||[]).filter(t=>{
-      if(!t.due_date) return false;
-      const d=new Date(t.due_date); d.setHours(0,0,0,0);
-      return d<=todayD;
-    });
+    homeDealTasks=(data||[]).filter(t=>!!t.due_date);
     homeDealTasksTs=Date.now();
   }
   list.innerHTML='';
@@ -602,29 +593,21 @@ async function renderHomeDealTasks(){
   if(homeDealTasks===null){
     list.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
     const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false}).limit(5000);
-    // Filter: only show tasks due today or overdue (no future tasks)
-    const todayD=new Date(); todayD.setHours(0,0,0,0);
-    homeDealTasks=(data||[]).filter(t=>{
-      if(!t.due_date) return false;
-      const d=new Date(t.due_date); d.setHours(0,0,0,0);
-      return d<=todayD;
-    });
+    homeDealTasks=(data||[]).filter(t=>!!t.due_date);
   }
 
-  // Update progress ring for deals tab
-  const tot=homeDealTasks.length+doneDealTasksToday;
+  // Ring counts only tasks that are due/overdue (FOCUS view of this tab)
+  const todayNow=new Date(); todayNow.setHours(0,0,0,0);
+  const dueTasks=homeDealTasks.filter(t=>{ const d=new Date(t.due_date); d.setHours(0,0,0,0); return d<=todayNow; });
+  const tot=dueTasks.length+doneDealTasksToday;
   const nd=doneDealTasksToday;
-  const urg=homeDealTasks.filter(t=>{
-    const d=new Date(t.due_date); d.setHours(0,0,0,0);
-    const now=new Date(); now.setHours(0,0,0,0);
-    return Math.floor((now-d)/86400000)>3;
-  }).length;
+  const urg=dueTasks.filter(t=>{ const d=new Date(t.due_date); d.setHours(0,0,0,0); return Math.floor((todayNow-d)/86400000)>3; }).length;
   updateProgressRing(tot,nd,urg,
     tot===0?'No deal tasks due today.':nd===tot&&tot>0?'All done — great progress.':`${tot-nd} deal task${tot-nd===1?'':'s'} remaining today`);
 
   list.innerHTML='';
   if(!homeDealTasks.length){
-    list.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No deal tasks due today.</div>';
+    list.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No deal tasks due.</div>';
     return;
   }
 
