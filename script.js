@@ -47,7 +47,7 @@ let selSegVal='All', editSegVal='All';
 let editClientId=null, editPartnerId=null, editCampaignId=null;
 let editingDealId=null;
 let editRecId=null;
-let homeTab='deals', homeDealTasks=null;
+let homeTab='deals', homeDealTasks=null, homeDealTasksTs=0;
 let doneDealTasksToday = 0;
 let doneNetworkTasksToday = 0;
 let homeMode='focus'; // 'focus' = due/overdue only; 'all' = everything + completed
@@ -128,44 +128,60 @@ function showToast(msg){ const t=document.getElementById('toast'); t.textContent
 // ── LOAD DATA ─────────────────────────────────────────────────────
 async function loadAll(){
   const today = new Date().toISOString().split('T')[0];
+  const todayD = new Date(); todayD.setHours(0,0,0,0);
 
-  const [cR, pR, dR, camR, recR, taskR, mtgR, actR] = await Promise.all([
+  // ── WAVE 1: data needed to render the homepage task list ──────────
+  const [cR, camR, mtgR, taskR, dtR] = await Promise.all([
     SB.from('clients').select('*').order('sort_order'),
+    SB.from('campaigns').select('*').order('sort_order'),
+    SB.from('client_meetings').select('*').eq('done',false).order('due_date'),
+    SB.from('task_completions').select('task_key,reset_date'),
+    SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false}).limit(5000),
+  ]);
+
+  CLIENTS   = (cR.data||[]).map(normaliseClient);
+  CAMPAIGNS = (camR.data||[]).map(normaliseCampaign);
+  MEETINGS  = (mtgR.data||[]);
+  doneTasks = new Set((taskR.data||[]).filter(t=>t.reset_date===today).map(t=>t.task_key));
+
+  // Pre-cache deal tasks so rHome() renders without a second DB round-trip
+  homeDealTasks = (dtR.data||[]).filter(t=>{
+    if(!t.due_date) return false;
+    const d=new Date(t.due_date); d.setHours(0,0,0,0);
+    return d<=todayD;
+  });
+  homeDealTasksTs = Date.now();
+
+  // Show the app and render immediately
+  document.getElementById('loading-overlay').classList.add('hidden');
+  rHome();
+
+  // ── WAVE 2: background enrichment (deals, partners, activities) ───
+  const [pR, dR, recR, actR] = await Promise.all([
     SB.from('partners').select('*').order('sort_order'),
     SB.from('deals').select('*').order('created_at'),
-    SB.from('campaigns').select('*').order('sort_order'),
     SB.from('recommendations').select('*').order('category').order('sort_order'),
-    SB.from('task_completions').select('task_key,reset_date'),
-    SB.from('client_meetings').select('*').eq('done',false).order('due_date'),
     SB.from('client_activities').select('client_id,type,occurred_at'),
   ]);
 
-  // Build global activity log — single source of truth for contact timers
+  PARTNERS       = (pR.data||[]).map(normalisePartner);
+  DEALS          = (dR.data||[]).map(normaliseDeal);
+  RECS           = recR.data||[];
   ALL_ACTIVITIES = actR.data||[];
 
-  CLIENTS   = (cR.data||[]).map(normaliseClient);
-  PARTNERS  = (pR.data||[]).map(normalisePartner);
-  DEALS     = (dR.data||[]).map(normaliseDeal);
-  CAMPAIGNS = (camR.data||[]).map(normaliseCampaign);
-  RECS      = recR.data||[];
-  MEETINGS  = (mtgR.data||[]);
-
-  // Override last_wa / last_call on every client from the activity log.
-  // This means editing client_activities in Supabase instantly reflects here.
+  // Patch client contact dates from the full activity log
   CLIENTS.forEach(c=>{
     const dates=computeClientDates(c.id);
     if(dates.wa) c.wa=dates.wa;
     if(dates.call) c.call=dates.call;
   });
 
-  // Task done state — only keep if reset_date is today
-  doneTasks = new Set(
-    (taskR.data||[]).filter(t => t.reset_date === today).map(t=>t.task_key)
-  );
+  // Clean up stale completions in the background (fire and forget)
+  const stale=(taskR.data||[]).filter(t=>t.reset_date!==today).map(t=>t.task_key);
+  if(stale.length) SB.from('task_completions').delete().in('task_key',stale);
 
-  // Clean up stale task completions from other days
-  const stale = (taskR.data||[]).filter(t=>t.reset_date!==today).map(t=>t.task_key);
-  if(stale.length) await SB.from('task_completions').delete().in('task_key', stale);
+  // Silently refresh home stats/contact dates (no loading state)
+  if(curTab==='home') rHome();
 }
 
 function normaliseClient(r){
@@ -432,11 +448,17 @@ async function rHome(){
   // Update mode toggle visual
   document.querySelectorAll('#home-mode-toggle .home-toggle-btn').forEach(b=>b.classList.toggle('on',b.dataset.mode===homeMode));
 
-  // Load deal tasks if not cached
+  // Load deal tasks if stale (only happens on manual tab-switch reload, not initial load)
   if(homeDealTasks===null){
-    list.innerHTML='<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--t3)">Loading…</div>';
+    list.innerHTML=`<div class="task-group-hdr" style="opacity:0.35">Tasks</div>${[1,2,3].map(()=>`<div class="sk-card"><div class="sk-line" style="width:55%;margin-bottom:8px"></div><div class="sk-line" style="width:30%"></div></div>`).join('')}`;
     const {data}=await SB.from('deal_tasks').select('*').eq('done',false).order('due_date',{ascending:true,nullsFirst:false}).limit(5000);
-    homeDealTasks=(data||[]).filter(t=>!!t.due_date);
+    const todayD=new Date(); todayD.setHours(0,0,0,0);
+    homeDealTasks=(data||[]).filter(t=>{
+      if(!t.due_date) return false;
+      const d=new Date(t.due_date); d.setHours(0,0,0,0);
+      return d<=todayD;
+    });
+    homeDealTasksTs=Date.now();
   }
   list.innerHTML='';
 
@@ -2734,7 +2756,12 @@ function go(tab){
     const btn=document.getElementById('tab-'+t);
     if(btn) btn.classList.toggle('active',t===tab);
   });
-  if(tab==='home'){ homeDealTasks=null; doneDealTasksToday=0; doneNetworkTasksToday=0; doneHomeDealTasks=[]; homeDoneDealTasks=null; rHome(); }
+  if(tab==='home'){
+  // Only force a deal-task reload if data is older than 5 minutes
+  if(Date.now()-homeDealTasksTs > 5*60*1000){ homeDealTasks=null; homeDealTasksTs=0; }
+  doneDealTasksToday=0; doneNetworkTasksToday=0; doneHomeDealTasks=[]; homeDoneDealTasks=null;
+  rHome();
+}
   else if(tab==='deals') rDeals();
   else if(tab==='campaigns') rCampaigns();
   else if(tab==='clients') rClients();
@@ -3435,8 +3462,5 @@ function updateHomeStats(){
   const now=new Date();
   document.getElementById('home-date').textContent=`${days[now.getDay()]} · ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
 
-  await loadAll();
-
-  document.getElementById('loading-overlay').classList.add('hidden');
-  rHome();
+  await loadAll(); // hides overlay and calls rHome() internally after wave 1
 })();

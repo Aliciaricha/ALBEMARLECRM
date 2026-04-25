@@ -270,8 +270,12 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .wa-regen { font-size: 11px; color: var(--t3); text-align: center; cursor: pointer; padding: 6px 0 0; }
 
 /* Loading overlay */
-.loading-overlay { position: fixed; inset: 0; z-index: 999; background: rgba(235,242,250,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; transition: opacity 0.4s; }
+.loading-overlay { position: fixed; inset: 0; z-index: 999; background: rgba(235,242,250,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; transition: opacity 0.55s cubic-bezier(0.4,0,0.2,1); }
 .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+.sk-card { padding: 13px 14px; border-radius: var(--r-md); background: rgba(255,255,255,0.52); border: 0.5px solid rgba(255,255,255,0.78); overflow: hidden; position: relative; margin-bottom: 7px; }
+.sk-card::after { content:''; position:absolute; inset:0; background: linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.65) 50%,transparent 100%); animation: sk-shimmer 1.5s ease-in-out infinite; }
+.sk-line { height: 9px; border-radius: 5px; background: rgba(138,109,62,0.10); }
+@keyframes sk-shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
 .loading-logo { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 300; color: var(--t1); letter-spacing: 0.04em; }
 .loading-sub { font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--t3); }
 .loading-bar { width: 160px; height: 2px; background: rgba(138,109,62,0.15); border-radius: 1px; overflow: hidden; }
