@@ -470,8 +470,11 @@ async function rHome(){
   });
 
   const allItems=BUCKETS.flatMap(b=>b.items);
+  // Count only network tasks that are still in the visible list as done (doneTasks can contain
+  // entries for tasks that have since disappeared from mkTasks output after activity logging)
+  const doneNetworkCount=allItems.filter(x=>!x.isDeal&&doneTasks.has(x.t.id)).length;
   const tot=allItems.length+doneDealTasksToday;
-  const nd=doneTasks.size+doneDealTasksToday;
+  const nd=doneNetworkCount+doneDealTasksToday;
   const urg=allItems.filter(x=>x.urg==='urgent').length;
   updateProgressRing(tot,nd,urg,
     nd===tot&&tot>0?'All done — exceptional work.':`${tot-nd} task${tot-nd===1?'':'s'} remaining`);
@@ -870,9 +873,6 @@ async function renderDealTasksTimeline(){
   const doneTasks2=doneData||[];
   wrap.innerHTML='';
   if(!tasks.length && !doneTasks2.length){ wrap.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No tasks.</div>'; return; }
-  if(!tasks.length && doneTasks2.length){
-    // skip to completed section below
-  }
   const today=new Date(); today.setHours(0,0,0,0);
   const buckets=new Map();
   tasks.forEach(t=>{
@@ -887,7 +887,8 @@ async function renderDealTasksTimeline(){
     if(!buckets.has(label)) buckets.set(label,{label,color,items:[]});
     buckets.get(label).items.push(t);
   });
-  if(!buckets.size){ wrap.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding tasks.</div>'; return; }
+  // Only bail out early if there are also no completed tasks to show
+  if(!buckets.size && !doneTasks2.length){ wrap.innerHTML='<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--t3);font-style:italic">No outstanding tasks.</div>'; return; }
   buckets.forEach(({label,color,items})=>{
     const hdr=document.createElement('div');
     hdr.className='rec-cat-header';
