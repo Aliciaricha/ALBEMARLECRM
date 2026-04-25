@@ -49,6 +49,7 @@ let editingDealId=null;
 let editRecId=null;
 let homeTab='deals', homeDealTasks=null;
 let doneDealTasksToday = 0;
+let doneNetworkTasksToday = 0;
 let homeMode='focus'; // 'focus' = due/overdue only; 'all' = everything + completed
 let doneHomeDealTasks=[]; // deal tasks completed this session, for immediate undo in ALL mode
 let homeDoneDealTasks=null; // DB-loaded completed deal tasks for ALL mode
@@ -344,6 +345,7 @@ function mkTasks(){
       return;
     }
     clients.forEach(c=>{
+      if(cam.type==='Seasonal'&&c.dnd) return; // DND clients excluded from seasonal campaigns
       // Only follow-up type campaigns suppress cadence WhatsApp/Call tasks
       if(['Follow-Up','WhatsApp','Calling','Personal'].includes(cam.type)) camCoveredIds.add(c.id);
       const rel=REL_CADENCES[c.relationship];
@@ -472,9 +474,9 @@ async function rHome(){
   const allItems=BUCKETS.flatMap(b=>b.items);
   // Count only network tasks that are still in the visible list as done (doneTasks can contain
   // entries for tasks that have since disappeared from mkTasks output after activity logging)
-  const doneNetworkCount=allItems.filter(x=>!x.isDeal&&doneTasks.has(x.t.id)).length;
-  const tot=allItems.length+doneDealTasksToday;
-  const nd=doneNetworkCount+doneDealTasksToday;
+  const doneNetworkInList=allItems.filter(x=>!x.isDeal&&doneTasks.has(x.t.id)).length;
+  const tot=allItems.length+(doneNetworkTasksToday-doneNetworkInList)+doneDealTasksToday;
+  const nd=doneNetworkTasksToday+doneDealTasksToday;
   const urg=allItems.filter(x=>x.urg==='urgent').length;
   updateProgressRing(tot,nd,urg,
     nd===tot&&tot>0?'All done — exceptional work.':`${tot-nd} task${tot-nd===1?'':'s'} remaining`);
@@ -547,8 +549,9 @@ async function rHome(){
         const act=client?`${t.title} \u2014 ${client.name}`:t.title;
         const el=document.createElement('div');
         el.className='tc done a'; el.style.animationDelay=(i*0.04)+'s'; el.style.opacity='0.45';
+        const dueLbl=t.due_date?`<span class="dt-timer">${new Date(t.due_date).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>`:'';
         el.innerHTML=`<div class="tc-av deal-tc-av">${DEAL_ICON}</div>
-          <div class="tc-body"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
+          <div class="tc-body"><div class="tc-act" style="text-decoration:line-through;opacity:0.7">${act}</div><div class="tc-why">${dueLbl}</div></div>
           <div class="chk on">${CHK_SVG}</div>`;
         el.querySelector('.chk').onclick=(ev)=>{ev.stopPropagation(); unTickDealTask(t.id);};
         list.appendChild(el);
@@ -757,6 +760,7 @@ async function tick(id, el, e){
   if(doneTasks.has(id)){
     // Un-tick: restore and re-render
     doneTasks.delete(id);
+    doneNetworkTasksToday=Math.max(0,doneNetworkTasksToday-1);
     await SB.from('task_completions').delete().eq('task_key',id);
     rHome();
   } else {
@@ -785,7 +789,8 @@ async function tick(id, el, e){
       }
     }
     // Update ring counts without re-rendering list
-    const tasks=mkTasks(), tot=tasks.length+(homeDealTasks?.length||0)+doneDealTasksToday, nd=doneTasks.size+doneDealTasksToday;
+    doneNetworkTasksToday++;
+    const tasks=mkTasks(), tot=tasks.length+doneNetworkTasksToday+(homeDealTasks?.length||0)+doneDealTasksToday, nd=doneNetworkTasksToday+doneDealTasksToday;
     const urg=tasks.filter(t=>t.urg==='urgent'&&!doneTasks.has(t.id)).length;
     updateProgressRing(tot,nd,urg,
       nd===tot&&tot>0?'All done — exceptional work.':`${tot-nd} task${tot-nd===1?'':'s'} remaining`);
@@ -2677,7 +2682,7 @@ function go(tab){
     const btn=document.getElementById('tab-'+t);
     if(btn) btn.classList.toggle('active',t===tab);
   });
-  if(tab==='home'){ homeDealTasks=null; doneDealTasksToday=0; doneHomeDealTasks=[]; homeDoneDealTasks=null; rHome(); }
+  if(tab==='home'){ homeDealTasks=null; doneDealTasksToday=0; doneNetworkTasksToday=0; doneHomeDealTasks=[]; homeDoneDealTasks=null; rHome(); }
   else if(tab==='deals') rDeals();
   else if(tab==='campaigns') rCampaigns();
   else if(tab==='clients') rClients();
