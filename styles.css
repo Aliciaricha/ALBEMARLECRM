@@ -99,8 +99,13 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .tc-body { flex: 1; min-width: 0; }
 .tc-act { font-size: 12px; font-weight: 600; color: var(--t1); }
 .tc-why { font-size: 11px; color: var(--t2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.arc-btn { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--t3); transition: color 0.15s, background 0.15s; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-.arc-btn:active { color: var(--t2); background: rgba(0,0,0,0.06); }
+.task-actions-title { padding: 16px 20px 6px; font-size: 13px; font-weight: 700; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-actions-body { padding: 8px 14px 24px; display: flex; flex-direction: column; gap: 8px; }
+.task-action-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 14px; font-size: 14px; font-weight: 600; color: var(--t1); cursor: pointer; background: rgba(255,255,255,0.72); border: 0.5px solid rgba(255,255,255,0.90); box-shadow: 0 1px 4px rgba(0,0,0,0.06); transition: opacity 0.15s; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.task-action-row:active { opacity: 0.65; }
+.task-action-row svg { flex-shrink: 0; }
+.task-action-archive { color: var(--amber,#d97706); }
+.task-action-cancel { color: var(--t3); }
 .chk { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; border: 1.5px solid rgba(138,109,62,0.28); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.18s; background: transparent; }
 .chk.on { background: var(--gold); border-color: var(--gold); }
 .chk svg { opacity: 0; transition: opacity 0.18s; stroke: white; }

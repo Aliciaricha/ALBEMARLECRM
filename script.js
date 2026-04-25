@@ -518,13 +518,11 @@ async function rHome(){
         const client=deal?CLIENTS.find(c=>c.id===deal.clientId):null;
         const act=client?`${t.title} \u2014 ${client.name}`:t.title;
         el.innerHTML=`<div class="tc-av deal-tc-av"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-          <div class="tc-body" style="cursor:pointer"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
-          <div class="arc-btn" title="Archive"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg></div>
+          <div class="tc-body"><div class="tc-act">${act}</div><div class="tc-why">${dealTaskTimer(t.due_date)}</div></div>
           <div class="chk"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
         el.querySelector('.chk').onclick=(ev)=>tickDealTask(t.id,el.querySelector('.chk'),ev);
-        el.querySelector('.arc-btn').onclick=(ev)=>archiveTask(t.id,ev);
-        el.querySelector('.tc-body').onclick=(ev)=>{ev.stopPropagation();openRescheduleTask(t.id,t.title,t.due_date);};
-        if(deal) el.onclick=(ev)=>{if(ev.target.closest('.chk')||ev.target.closest('.tc-body')||ev.target.closest('.arc-btn')) return; openDealModal(deal.clientId,deal.id);};
+        el.onclick=(ev)=>{ if(ev.target.closest('.chk')) return;
+          openTaskActions(t.id, act, 'deal', {title:t.title, dueDate:t.due_date}, el); };
       } else {
         const avClass=t.isCam?'cam-av':'';
         const avContent=t.isCam?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l16 8-16 8V4z"/></svg>':ini(t.nm);
@@ -532,22 +530,20 @@ async function rHome(){
         const isDone=doneTasks.has(t.id);
         if(isDone && homeMode==='focus'){ el.style.display='none'; }
         if(isDone && homeMode==='all'){ el.style.opacity='0.45'; }
-        const arcSvg='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>';
         el.innerHTML=`<div class="tc-av ${avClass}">${avContent}</div>
           <div class="tc-body"><div class="tc-act">${t.act}</div><div class="tc-why">${t.why}</div></div>
-          <div class="arc-btn" title="Archive" onclick="archiveTask('${t.id}',event)">${arcSvg}</div>
           <div class="chk ${isDone?'on':''}" onclick="tick('${t.id}',this,event)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
         if(t.isCam){
-          el.onclick=(e)=>{ if(e.target.closest('.chk')||e.target.closest('.arc-btn')) return;
-            const cam=CAMPAIGNS.find(c=>c.id===t.camId);
-            if(t.clientObj) openWaSheet(t.clientObj,cam); else openCampaign(cam);
-          };
+          el.onclick=(e)=>{ if(e.target.closest('.chk')) return;
+            openTaskActions(t.id, t.act, 'cam', {camId:t.camId, clientObj:t.clientObj}, el); };
         } else if(t.isMtg){
-          el.onclick=(e)=>{ if(e.target.closest('.chk')||e.target.closest('.arc-btn')) return; openEditMeeting(t.mtgId); };
+          el.onclick=(e)=>{ if(e.target.closest('.chk')) return;
+            openTaskActions(t.id, t.act, 'mtg', {mtgId:t.mtgId}, el); };
         } else {
           const isCall=t.id.startsWith('cl-');
-          const client=CLIENTS.find(c=>'wa-'+c.id===t.id||'cl-'+c.id===t.id);
-          if(client) el.onclick=(e)=>{ if(e.target.closest('.chk')||e.target.closest('.arc-btn')) return; openSnoozeCadence(client.id,isCall?'call':'wa'); };
+          const clientId=t.id.slice(3);
+          el.onclick=(e)=>{ if(e.target.closest('.chk')) return;
+            openTaskActions(t.id, t.act, isCall?'call':'wa', {clientId}, el); };
         }
       }
       list.appendChild(el);
@@ -660,8 +656,8 @@ async function renderHomeDealTasks(){
         </div>`;
       // Tick
       el.querySelector('.chk').onclick=(ev)=>tickDealTask(t.id,el.querySelector('.chk'),ev);
-      el.querySelector('.tc-body').onclick=(ev)=>{ev.stopPropagation();openRescheduleTask(t.id,t.title,t.due_date);};
-      if(deal) el.onclick=(ev)=>{if(ev.target.closest('.chk')||ev.target.closest('.tc-body')) return; openDealModal(deal.clientId,deal.id);};
+      el.onclick=(ev)=>{ if(ev.target.closest('.chk')) return;
+        openTaskActions(t.id, act, 'deal', {title:t.title, dueDate:t.due_date}, el); };
       list.appendChild(el);
     });
   });
@@ -833,9 +829,36 @@ async function tick(id, el, e){
   }
 }
 
-async function archiveTask(id, event){
-  event.stopPropagation();
-  const card=event.currentTarget.closest('.tc');
+let _taskActionsCtx=null;
+function openTaskActions(taskId, label, type, extras, cardEl){
+  _taskActionsCtx={taskId, type, extras, cardEl};
+  document.getElementById('task-actions-title').textContent=label;
+  openModal('modal-task-actions');
+}
+function taskActionsReschedule(){
+  if(!_taskActionsCtx) return;
+  const {taskId, type, extras}=_taskActionsCtx;
+  closeModal('modal-task-actions');
+  setTimeout(()=>{
+    if(type==='deal') openRescheduleTask(taskId, extras.title, extras.dueDate);
+    else if(type==='wa'||type==='call') openSnoozeCadence(extras.clientId, type);
+    else if(type==='mtg') openEditMeeting(extras.mtgId);
+    else if(type==='cam'){
+      const cam=CAMPAIGNS.find(c=>c.id===extras.camId);
+      if(extras.clientObj&&cam) openWaSheet(extras.clientObj,cam);
+      else if(cam) openCampaign(cam);
+    }
+  },260);
+}
+async function taskActionsArchive(){
+  if(!_taskActionsCtx) return;
+  const {taskId, cardEl}=_taskActionsCtx;
+  closeModal('modal-task-actions');
+  await archiveTask(taskId, cardEl);
+}
+
+async function archiveTask(id, cardEl){
+  const card=cardEl||null;
   // Animate out immediately
   if(card){
     card.style.transition='opacity 0.25s, max-height 0.35s, margin-bottom 0.35s, padding 0.35s';
