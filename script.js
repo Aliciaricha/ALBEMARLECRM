@@ -2849,7 +2849,11 @@ function openModal(id){
   if(!el){ console.error('openModal: element not found:',id); return; }
   el.classList.add('open');
   const sheet=el.querySelector('.modal-sheet');
-  if(sheet) sheet.scrollTop=0;
+  if(sheet){
+    sheet.scrollTop=0;
+    // iOS: scrollTop set before the slide-up animation completes often doesn't stick
+    setTimeout(()=>{ sheet.scrollTop=0; },350);
+  }
 }
 function closeModal(id){ const el=document.getElementById(id); if(el) el.classList.remove('open'); }
 function closeModalOut(e,id){ if(e.target===document.getElementById(id)) closeModal(id); }

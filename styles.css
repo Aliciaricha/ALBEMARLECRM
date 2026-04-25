@@ -217,7 +217,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Manrope'
 .cri-av { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Cormorant Garamond', serif; font-size: 13px; background: rgba(138,109,62,0.09); border: 0.5px solid var(--gold-border); color: var(--gold); flex-shrink: 0; }
 .cri-name { font-size: 13px; font-weight: 600; color: var(--t1); }
 .cri-sub { font-size: 11px; color: var(--t3); margin-top: 1px; }
-.modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(20,40,70,0.30); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.28s; }
+.modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(20,40,70,0.30); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.28s; overflow: hidden; }
 .modal-overlay.open { opacity: 1; pointer-events: all; }
 .modal-sheet { width: 100%; max-height: 92vh; border-radius: var(--r-xl) var(--r-xl) 0 0; background: rgba(244,249,255,0.96); backdrop-filter: blur(40px) saturate(1.8); -webkit-backdrop-filter: blur(40px) saturate(1.8); border: 0.5px solid rgba(255,255,255,0.90); box-shadow: var(--sh-l); transform: translateY(100%); transition: transform 0.32s cubic-bezier(0.32,0.72,0,1); overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 .modal-overlay.open .modal-sheet { transform: translateY(0); }
