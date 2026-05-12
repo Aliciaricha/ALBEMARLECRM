@@ -2492,13 +2492,13 @@ function rPartners(){
           <div class="pc-name">${name}</div>
           <div class="pc-contacts"></div>
         </div>
+        ${effRate?`<div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:3px;flex-shrink:0;padding-right:10px;border-right:1px solid var(--bdr)">
+          <div style="font-size:11px;color:var(--t1);font-weight:600;white-space:nowrap">${spendFor100k} <span style="font-size:10px;font-weight:400;color:var(--sub)">for $100k</span></div>
+          <div style="font-size:11px;color:var(--t1);font-weight:600;white-space:nowrap">${spendFor10k} <span style="font-size:10px;font-weight:400;color:var(--sub)">for $10k</span></div>
+        </div>`:''}
         <div class="pc-r" style="align-self:flex-start;margin-top:2px">
           ${fee?`<span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--gold);font-weight:300">${fee}</span>`:''}
           ${country?`<span class="pill p-gh" style="font-size:9px">${country}</span>`:''}
-          ${effRate?`<div style="font-size:9px;color:var(--sub);margin-top:4px;text-align:right;line-height:1.7">
-            <div>${spendFor100k} <span style="opacity:0.6">for $100k comm</span></div>
-            <div>${spendFor10k} <span style="opacity:0.6">for $10k comm</span></div>
-          </div>`:''}
         </div>`;
       const contactsEl=div.querySelector('.pc-contacts');
       contacts.forEach((p,i)=>{
