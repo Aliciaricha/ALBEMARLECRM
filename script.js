@@ -2441,12 +2441,13 @@ async function tickFollowUpCam(camId, clientId, rowEl){
 }
 
 // ── PARTNERS ──────────────────────────────────────────────────────
-function partnerSpendBucket(spend){
-  if(!spend||spend===0) return {key:'none',label:'No Spend'};
-  if(spend<100000)      return {key:'u100k',label:'Under $100k'};
-  if(spend<500000)      return {key:'u500k',label:'$100k – $500k'};
-  if(spend<1000000)     return {key:'u1m',  label:'$500k – $1m'};
-  return                       {key:'1mplus',label:'$1m+'};
+function partnerSpendBucket(spendFor10k){
+  if(!spendFor10k||!isFinite(spendFor10k)) return {key:'none',label:'No Rate Set'};
+  if(spendFor10k<100000)  return {key:'u100k', label:'Under $100k for $10k comm'};
+  if(spendFor10k<250000)  return {key:'u250k', label:'$100k – $250k for $10k comm'};
+  if(spendFor10k<500000)  return {key:'u500k', label:'$250k – $500k for $10k comm'};
+  if(spendFor10k<1000000) return {key:'u1m',   label:'$500k – $1m for $10k comm'};
+  return                          {key:'1mplus',label:'Over $1m for $10k comm'};
 }
 function partnerRateBucket(rate){
   if(!rate)        return {key:'none',  label:'No Rate Set'};
@@ -2470,8 +2471,9 @@ function rPartners(){
 
   // Sort list
   const effRateOf=p=>{const r=parsePct(p.fee),b=parsePct(p.bizFee);return r&&b?(r*b)/100:r||0;};
-  if(partnerSort==='spend_asc')  list.sort((a,b)=>(a.spend||0)-(b.spend||0));
-  else if(partnerSort==='spend_desc') list.sort((a,b)=>(b.spend||0)-(a.spend||0));
+  const s10kOf=p=>{const r=effRateOf(p);return r>0?1000000/r:Infinity;};
+  if(partnerSort==='spend_asc')  list.sort((a,b)=>s10kOf(a)-s10kOf(b));
+  else if(partnerSort==='spend_desc') list.sort((a,b)=>s10kOf(b)-s10kOf(a));
   else if(partnerSort==='rate_desc')  list.sort((a,b)=>effRateOf(b)-effRateOf(a));
   else if(partnerSort==='rate_asc')   list.sort((a,b)=>effRateOf(a)-effRateOf(b));
   else if(partnerSort==='name_asc')   list.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
@@ -2482,7 +2484,7 @@ function rPartners(){
 
   // Determine grouping key for each partner
   const groupKeyOf=p=>{
-    if(partnerSort==='spend_asc'||partnerSort==='spend_desc') return partnerSpendBucket(p.spend||0);
+    if(partnerSort==='spend_asc'||partnerSort==='spend_desc') return partnerSpendBucket(s10kOf(p));
     if(partnerSort==='rate_desc'||partnerSort==='rate_asc')   return partnerRateBucket(effRateOf(p));
     if(partnerSort==='name_asc') return {key:'all',label:''};
     return {key:(p.cat||'Other').trim().toLowerCase(), label:(p.cat||'Other').trim()};
