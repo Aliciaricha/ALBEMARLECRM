@@ -39,7 +39,7 @@ function saveRelCadences(){ localStorage.setItem('rel_cadences',JSON.stringify(R
 // ── STATE ─────────────────────────────────────────────────────────
 let CLIENTS=[], PARTNERS=[], DEALS=[], CAMPAIGNS=[], RECS=[], MEETINGS=[];
 let doneTasks = new Set(); // task_key set from DB
-let cF='All', curTab='home';
+let cF='All', curTab='home', partnerSort='cat';
 let relF='All'; // KEEP for backward compat but no longer used in UI
 let clientFilters={relationship:null, nw:null, interest:null, tag:null}; // active filter state
 let recCat='All';
@@ -2441,36 +2441,74 @@ async function tickFollowUpCam(camId, clientId, rowEl){
 }
 
 // ── PARTNERS ──────────────────────────────────────────────────────
+function partnerSpendBucket(spend){
+  if(!spend||spend===0) return {key:'none',label:'No Spend'};
+  if(spend<100000)      return {key:'u100k',label:'Under $100k'};
+  if(spend<500000)      return {key:'u500k',label:'$100k – $500k'};
+  if(spend<1000000)     return {key:'u1m',  label:'$500k – $1m'};
+  return                       {key:'1mplus',label:'$1m+'};
+}
+function partnerRateBucket(rate){
+  if(!rate)        return {key:'none',  label:'No Rate Set'};
+  if(rate<5)       return {key:'u5',    label:'Under 5%'};
+  if(rate<10)      return {key:'u10',   label:'5% – 10%'};
+  if(rate<20)      return {key:'u20',   label:'10% – 20%'};
+  return                  {key:'20plus',label:'Over 20%'};
+}
 function rPartners(){
+  // update sort button label
+  const sortLabels={cat:'Sort',spend_asc:'Spend ↑',spend_desc:'Spend ↓',rate_desc:'Rate ↓',rate_asc:'Rate ↑',name_asc:'A – Z'};
+  const lbl=document.getElementById('par-sort-lbl');
+  if(lbl) lbl.textContent=partnerSort==='cat'?'Sort':sortLabels[partnerSort]||'Sort';
+  const btn=document.getElementById('par-sort-btn');
+  if(btn) btn.style.background=partnerSort==='cat'?'':'rgba(138,109,62,0.12)';
+  if(btn) btn.style.borderColor=partnerSort==='cat'?'rgba(255,255,255,0.80)':'var(--gold-border)';
+  if(btn) btn.style.color=partnerSort==='cat'?'':'var(--gold)';
+
   const financeMatch=cF==='Investment Bank';
   let list=cF==='All'?[...PARTNERS]:[...PARTNERS.filter(p=>financeMatch?(p.cat==='Investment Bank'||p.cat==='Foreign Exchange'||p.cat==='Family Office'):p.cat===cF)];
-  list.sort((a,b)=>{
+
+  // Sort list
+  const effRateOf=p=>{const r=parsePct(p.fee),b=parsePct(p.bizFee);return r&&b?(r*b)/100:r||0;};
+  if(partnerSort==='spend_asc')  list.sort((a,b)=>(a.spend||0)-(b.spend||0));
+  else if(partnerSort==='spend_desc') list.sort((a,b)=>(b.spend||0)-(a.spend||0));
+  else if(partnerSort==='rate_desc')  list.sort((a,b)=>effRateOf(b)-effRateOf(a));
+  else if(partnerSort==='rate_asc')   list.sort((a,b)=>effRateOf(a)-effRateOf(b));
+  else if(partnerSort==='name_asc')   list.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  else list.sort((a,b)=>{
     if((a.cat||'').toLowerCase()!==(b.cat||'').toLowerCase()) return (a.cat||'').localeCompare(b.cat||'');
     return (a.name||'').localeCompare(b.name||'');
   });
 
-  // Group by category → company (case-insensitive)
-  const byCategory=[]; const catIdx={};
+  // Determine grouping key for each partner
+  const groupKeyOf=p=>{
+    if(partnerSort==='spend_asc'||partnerSort==='spend_desc') return partnerSpendBucket(p.spend||0);
+    if(partnerSort==='rate_desc'||partnerSort==='rate_asc')   return partnerRateBucket(effRateOf(p));
+    if(partnerSort==='name_asc') return {key:'all',label:''};
+    return {key:(p.cat||'Other').trim().toLowerCase(), label:(p.cat||'Other').trim()};
+  };
+
+  // Group by bucket → company (case-insensitive)
+  const byGroup=[]; const grpIdx={};
   list.forEach(p=>{
-    const catRaw=(p.cat||'Other').trim();
-    const catKey=catRaw.toLowerCase();
+    const {key,label}=groupKeyOf(p);
     const coKey=(p.name||'').trim().toLowerCase();
     const coDisplay=(p.name||'').trim();
-    if(catIdx[catKey]===undefined){ catIdx[catKey]=byCategory.length; byCategory.push({cat:catRaw,companies:[]}); }
-    const grp=byCategory[catIdx[catKey]];
+    if(grpIdx[key]===undefined){ grpIdx[key]=byGroup.length; byGroup.push({label,companies:[]}); }
+    const grp=byGroup[grpIdx[key]];
     const existing=grp.companies.find(c=>c.key===coKey);
     if(existing) existing.contacts.push(p);
     else grp.companies.push({name:coDisplay, key:coKey, contacts:[p]});
   });
 
   const el=document.getElementById('par-list'); el.innerHTML='';
-  const showCatHeaders=cF==='All';
+  const showHeaders=partnerSort!=='name_asc'&&(partnerSort!=='cat'||cF==='All');
   let idx=0;
 
-  byCategory.forEach(({cat,companies})=>{
-    if(showCatHeaders){
+  byGroup.forEach(({label,companies})=>{
+    if(showHeaders&&label){
       const h=document.createElement('div');
-      h.className='rec-cat-header'; h.textContent=cat;
+      h.className='rec-cat-header'; h.textContent=label;
       el.appendChild(h);
     }
     companies.forEach(({name,contacts})=>{
@@ -2515,6 +2553,19 @@ function rPartners(){
       el.appendChild(div);
     });
   });
+}
+
+function openPartnerSort(){
+  document.querySelectorAll('#modal-partner-sort .fchip[data-group="psort"]').forEach(c=>{
+    c.classList.toggle('on', c.dataset.val===partnerSort);
+  });
+  openModal('modal-partner-sort');
+}
+function applyPartnerSort(){
+  const sel=document.querySelector('#modal-partner-sort .fchip.on');
+  partnerSort=sel?sel.dataset.val:'cat';
+  closeModal('modal-partner-sort');
+  rPartners();
 }
 
 function openP(p){

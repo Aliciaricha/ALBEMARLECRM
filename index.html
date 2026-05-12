@@ -158,6 +158,12 @@
         <div class="chip" onclick="setF(this,'c','Interior Designer')">Interior</div>
         <div class="chip" onclick="setF(this,'c','Luxury')">Luxury</div>
       </div>
+      <div class="cli-filter-bar">
+        <button class="cli-filter-btn" id="par-sort-btn" onclick="openPartnerSort()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="9" y1="18" x2="15" y2="18"/></svg>
+          <span id="par-sort-lbl">Sort</span>
+        </button>
+      </div>
       <div class="plist" id="par-list"></div>
       <div style="height:24px"></div>
     </div>
@@ -743,6 +749,45 @@
 </div>
 
 <!-- CLIENT FILTERS SHEET -->
+<!-- PARTNER SORT -->
+<div class="modal-overlay" id="modal-partner-sort" onclick="closeModalOut(event,'modal-partner-sort')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Sort Partners</div>
+    <div class="form-body" style="gap:18px">
+
+      <div class="filter-section">
+        <div class="filter-sec-lbl">Order By</div>
+        <div class="filter-chips-wrap">
+          <div class="fchip on" data-group="psort" data-val="cat" onclick="toggleFChip(this)">Category</div>
+          <div class="fchip" data-group="psort" data-val="name_asc" onclick="toggleFChip(this)">Name A – Z</div>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-sec-lbl">Client Spend</div>
+        <div class="filter-chips-wrap">
+          <div class="fchip" data-group="psort" data-val="spend_asc" onclick="toggleFChip(this)">Lowest First</div>
+          <div class="fchip" data-group="psort" data-val="spend_desc" onclick="toggleFChip(this)">Highest First</div>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-sec-lbl">Commission Rate</div>
+        <div class="filter-chips-wrap">
+          <div class="fchip" data-group="psort" data-val="rate_desc" onclick="toggleFChip(this)">Highest First</div>
+          <div class="fchip" data-group="psort" data-val="rate_asc" onclick="toggleFChip(this)">Lowest First</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="form-footer" style="padding-top:6px">
+      <button class="form-submit" onclick="applyPartnerSort()">Apply</button>
+      <div class="form-cancel" onclick="partnerSort='cat';closeModal('modal-partner-sort');rPartners()">Reset</div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-client-filters" onclick="closeModalOut(event,'modal-client-filters')">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
