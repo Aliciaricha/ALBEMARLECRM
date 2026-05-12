@@ -2537,10 +2537,6 @@ function rPartners(){
         <div class="pc-r" style="align-self:flex-start;margin-top:2px">
           ${fee?`<span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--gold);font-weight:300">${fee}</span>`:''}
           ${country?`<span class="pill p-gh" style="font-size:9px">${country}</span>`:''}
-          ${effRate?`<div style="font-size:9px;color:var(--sub);margin-top:4px;text-align:right;line-height:1.7">
-            <div>${spendFor100k} <span style="opacity:0.6">for $100k comm</span></div>
-            <div>${spendFor10k} <span style="opacity:0.6">for $10k comm</span></div>
-          </div>`:''}
         </div>`;
       const contactsEl=div.querySelector('.pc-contacts');
       contacts.forEach((p,i)=>{
