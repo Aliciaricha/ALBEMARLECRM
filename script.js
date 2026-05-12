@@ -2478,6 +2478,11 @@ function rPartners(){
       const rep=contacts[0]; // representative for avatar/fee/country
       const country=contacts.map(c=>c.country).find(Boolean)||'';
       const fee=contacts.map(c=>c.fee).find(Boolean)||'';
+      const bizFee=contacts.map(c=>c.bizFee).find(Boolean)||'';
+      const refPct=parsePct(fee), bizPct=parsePct(bizFee);
+      const effRate=refPct&&bizPct?(refPct*bizPct)/100:refPct;
+      const spendFor100k=effRate?fm(Math.round(10000000/effRate)):'';
+      const spendFor10k=effRate?fm(Math.round(1000000/effRate)):'';
       const div=document.createElement('div');
       div.className='pc gc a'; div.style.animationDelay=(idx++*0.04)+'s';
       if(!multi) div.onclick=()=>openP(rep);
@@ -2490,6 +2495,10 @@ function rPartners(){
         <div class="pc-r" style="align-self:flex-start;margin-top:2px">
           ${fee?`<span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--gold);font-weight:300">${fee}</span>`:''}
           ${country?`<span class="pill p-gh" style="font-size:9px">${country}</span>`:''}
+          ${effRate?`<div style="font-size:9px;color:var(--sub);margin-top:4px;text-align:right;line-height:1.7">
+            <div>${spendFor100k} <span style="opacity:0.6">for $100k comm</span></div>
+            <div>${spendFor10k} <span style="opacity:0.6">for $10k comm</span></div>
+          </div>`:''}
         </div>`;
       const contactsEl=div.querySelector('.pc-contacts');
       contacts.forEach((p,i)=>{
